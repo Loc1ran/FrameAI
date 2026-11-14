@@ -55,11 +55,48 @@ class GuideEngineTest {
         val brightLeft = SceneRead(leftLuma = 0.82f, rightLuma = 0.28f, warmth = 0.2f)
         val guide = engine.suggest(boxAt(0.33f, 0.33f), scene = brightLeft)
         assertEquals(0.67, guide.targetX, 0.0001)
-        assertEquals(GuideEngine.BACKGROUND_MESSAGE, guide.message)
+        assertEquals(GuideEngine.PLACE_ANY_MESSAGE, guide.message)
         assertEquals(LutIds.WARM_FILM, brightLeft.lookId)
         val settled = engine.suggest(boxAt(0.67f, 0.33f), scene = brightLeft)
         assertEquals(GuideEngine.KIND_READY, settled.kind)
         assertEquals(GuideEngine.READY_WARM, settled.message)
+    }
+
+    @Test
+    fun aBalancedFrameWithoutAPersonIsReady() {
+        val even = SceneRead(leftLuma = 0.4f, rightLuma = 0.42f, warmth = 0.02f)
+        val guide = engine.suggest(null, scene = even)
+        assertEquals(GuideEngine.KIND_READY, guide.kind)
+        assertEquals(GuideEngine.OPEN_READY, guide.message)
+        assertTrue(guide.isReady)
+        assertFalse(guide.message.contains("face", ignoreCase = true))
+    }
+
+    @Test
+    fun aHorizonInTheMiddleMovesToTheNearerGridLine() {
+        val sky = SceneRead(leftLuma = 0.5f, rightLuma = 0.48f, warmth = 0.1f, horizonY = 0.5f)
+        val guide = engine.suggest(null, scene = sky)
+        assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
+        assertEquals(0.33, guide.targetY, 0.0001)
+        assertEquals(GuideEngine.HORIZON_UPPER, guide.message)
+        assertEquals(0.5, guide.subjectY!!, 0.0001)
+    }
+
+    @Test
+    fun aHorizonOnAGridLineIsReady() {
+        val sky = SceneRead(leftLuma = 0.5f, rightLuma = 0.48f, warmth = 0.0f, horizonY = 0.67f)
+        val guide = engine.suggest(null, scene = sky)
+        assertEquals(GuideEngine.KIND_READY, guide.kind)
+        assertEquals(GuideEngine.HORIZON_READY, guide.message)
+        assertTrue(guide.isReady)
+    }
+
+    @Test
+    fun aBrightSideWithoutAPersonStillPlacesTheSubject() {
+        val brightLeft = SceneRead(leftLuma = 0.8f, rightLuma = 0.3f, warmth = 0.0f)
+        val guide = engine.suggest(null, scene = brightLeft)
+        assertEquals(0.67, guide.targetX, 0.0001)
+        assertEquals(GuideEngine.PLACE_ANY_MESSAGE, guide.message)
     }
 
     @Test

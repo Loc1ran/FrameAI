@@ -1,101 +1,71 @@
 # FrameAI: three-developer plan
 
-The camera coaches a person, a background, or a landscape. A face is not required. Gemini compares one frame with a short list of reference patterns and tells the user to zoom in, zoom out, or hold. The phone changes zoom only after Apply zoom.
+The app takes a picture of anything: a person, a place, an object, or a background. A face is not required.
 
-There is no Gemini API key. The Google login on the machine that runs the server is the credential. Trial credit is spent only by project `project-640ec6f8-36a8-48b1-a57`. Do not enable pay-as-you-go. Do not deploy Cloud Run. Do not upgrade the billing account.
+Gemini looks at one JPEG of the frame that is on the screen right now. The user does not upload a sample of the picture they want. The reference cards are written patterns, not photos.
 
-## How the team shares Gemini
+There is no Gemini API key. The Google login on this PC is the credential. Trial credit is spent only by project `project-640ec6f8-36a8-48b1-a57`. Do not enable pay-as-you-go. Do not deploy Cloud Run.
 
-Other developers never receive a key and never log into that Cloud project.
+## What Gemini receives
 
-- On their own laptops they run `AI_MODE=mock`. `POST /v1/live-coach` returns `contracts/live-coach.mock.json` with `source=demo_mock`. No credit is used.
-- A real Gemini answer is available only by calling the server on the PC that already completed the Google login. The request header is `X-Demo-Token`. That token is not a Google key. It only allows a call to this team's server.
-- The Android app never contains `GEMINI_API_KEY`, `DEMO_TOKEN`, or a credential file.
-- `server/.env` and the Google credential file stay off git.
+`POST /v1/live-coach` takes one JPEG field named `image`. That file is the current camera frame, long edge 768 px, sent at most every 4 seconds. The header is `X-Demo-Token`. That token is not a Google key.
 
-If that PC is off, or the phone is in airplane mode, the app keeps coaching from on-device rules and the label stays `offline_rules`. A cloud answer is labeled `gemini`. A mock answer is labeled `demo_mock`.
+Gemini returns one instruction: the scene (`portrait`, `landscape`, or `other`), the subject, a reference id, and `zoom` of `in`, `out`, or `hold`. The phone moves the lens only after Apply zoom.
 
-## What is already running
+The reference ids are `portrait_space_left`, `portrait_space_right`, `landscape_low_horizon`, `landscape_high_horizon`, `landscape_subject_small`, `street_layer`, and `none`. They live in `server/references.json`. Do not scrape photos from the web.
 
-On the credit PC, `server/.env` has `AI_MODE=gemini`, `GOOGLE_CLOUD_PROJECT=project-640ec6f8-36a8-48b1-a57`, `GOOGLE_CLOUD_LOCATION=global`, and `MODEL_ID=gemini-3.5-flash-lite`. Gemini 2.5 is retired for this new project, so the server does not call it. The model endpoint is `global`.
+If the server does not answer, the phone keeps coaching from the same live frame on the device. That label is `offline_rules`. A cloud answer is `gemini`. A mock answer is `demo_mock`.
 
-`GET /health` returns `geminiConfigured: true` when the login and the project id are both present. `POST /v1/live-coach` and `POST /v1/shot-review` accept one JPEG field named `image`, max 2 MB, plus `X-Demo-Token`. One Gemini call at a time. Timeout is 12 seconds. Errors are 401, 400, 413, 429, 503, and 502. The server does not log the image or the token.
+## Already done
 
-Reference cards live in `server/references.json`. The schema is `contracts/live-coach.schema.json`. The phone does not call this endpoint yet.
+- The server accepts the current-frame JPEG. Model `gemini-3.5-flash-lite`, location `global`. `GET /health` reports `geminiConfigured` without showing a key.
+- The phone coaches any subject without Gemini: a person on a third, a horizon on a grid line, a brighter side left open, or an even frame that is ready to shoot.
+- The Realme reaches this PC over USB with `adb reverse tcp:8080 tcp:8080`, then calls `http://127.0.0.1:8080`. Same Wi-Fi is not required.
+- A and B do not get the Cloud login. On their laptops, `AI_MODE=mock` returns `contracts/live-coach.mock.json` and spends no credit.
 
-## What the user sees
-
-1. Rear camera, full preview, rule-of-thirds grid.
-2. Every few seconds the phone sends one small JPEG to `/v1/live-coach`.
-3. The reply names the scene (`portrait`, `landscape`, or `other`) and a subject, even when there is no face.
-4. One instruction, max 120 characters. Zoom, horizon, closer, and farther are allowed. "Move left" and "move right" are not.
-5. Apply zoom uses `targetZoomRatio` when `zoom` is `in` or `out`. `hold` does not move the lens.
-6. The matched pattern is shown by its id, not by a downloaded photo.
-7. Capture keeps the original JPEG. Warm Film or Cool Cinema is a separate edit.
-
-## Contract
-
-`LiveGuide` and `ShotReview` stay as they are. Live coaching is a separate object.
-
-```json
-{
-  "sceneType": "portrait",
-  "subject": "person",
-  "referenceId": "portrait_space_left",
-  "message": "Zoom in. The person is too small for this portrait.",
-  "zoom": "in",
-  "targetZoomRatio": 1.6,
-  "targetX": 0.67,
-  "targetY": 0.33,
-  "subjectX": 0.42,
-  "subjectY": 0.48,
-  "isReady": false,
-  "source": "gemini"
-}
-```
-
-`referenceId` is one of `portrait_space_left`, `portrait_space_right`, `landscape_low_horizon`, `landscape_high_horizon`, `landscape_subject_small`, `street_layer`, or `none`. Those cards are written patterns the team owns. Do not scrape photos from the web.
+The phone does not send the current frame to Gemini yet. That send is Developer C's next task.
 
 ## Who is who
 
-A, B, and C are three people. Each has six tasks. Developer C is us: we are the only ones with this PC and with the Realme, because the phone is plugged in here. A and B write code on their own laptops against mock JSON. They do not get a Cloud login, and they do not take the phone.
+A, B, and C are three people. Each has six tasks. Developer C is us. We are the only ones with this PC and the Realme. A and B write code on their own laptops. They do not take the phone.
 
 ## Developer A — a person in the frame
 
 1. When a face is present, decide clipped, too small, too large, or on a third.
-2. Map that result to `portrait_space_left` or `portrait_space_right`, with a target point and a `zoom` of `in`, `out`, or `hold`.
-3. Draw the face area, the target, and the message. No fixed corner circle.
-4. Read the portrait mock and show its `message` and `referenceId` on the preview.
-5. Tests: clipped face, small face, large face, and a face already on the third.
-6. Open a pull request. C is the one who installs it on the phone.
+2. Map that result to `portrait_space_left` or `portrait_space_right`, with `zoom` of `in`, `out`, or `hold`.
+3. Draw the subject area, the target, and the message. No fixed corner circle.
+4. Show the portrait mock's `message` and `referenceId` on the preview.
+5. Tests: clipped, small, large, and already on a third.
+6. Open a pull request. C installs it on the phone.
 
 ## Developer B — the place around the subject
 
-1. From the frame, read which side is brighter and whether the light is warm or cool.
-2. With no face and a bright top, call it a landscape and put the horizon on a third.
-3. With no face and no horizon, say "Point at a subject or a horizon."
-4. Draw the horizon line when `sceneType` is `landscape`.
-5. Choose `warm_film` or `cool_cinema` from that light reading. Tests cover bright sky, empty frame, and warm versus cool.
-6. Open a pull request. C is the one who installs it on the phone.
+1. Read which side is brighter and whether the light is warm or cool.
+2. With no face and a clear horizon, put that horizon on a grid line.
+3. With no face and no horizon, the frame can still be shot. Say so.
+4. Draw the horizon line for a landscape reply.
+5. Choose `warm_film` or `cool_cinema` from the light. Test bright sky, an even frame, and warm versus cool.
+6. Open a pull request. C installs it on the phone.
 
 ## Developer C — us, this PC and the phone
 
-1. Push the current coach server on a new branch, not onto `main`, so A and B can start.
-2. Add `suggestedLutId` to the live-coach schema and to the Gemini reply.
-3. On the phone, send one JPEG every 4 seconds to `http://127.0.0.1:8080/v1/live-coach` through `adb reverse`. No key in the app.
+1. Keep the server on this PC. Do not create an API key. Do not turn on pay-as-you-go.
+2. Add `suggestedLutId` (`warm_film`, `cool_cinema`, or `none`) to the live-coach reply.
+3. On the phone, send the current frame JPEG to `http://127.0.0.1:8080/v1/live-coach` through the USB tunnel. No key in the app.
 4. On the phone, add Apply zoom. `in` and `out` call `setZoomRatio`. `hold` does not move the lens.
-5. If our server does not answer, show A and B's on-device result and label it `offline_rules`. Keep the last Gemini reply for 8 seconds first.
-6. Run three scenes on the Realme: a person who is too small, a landscape, and airplane mode. Confirm a live reply says `source=gemini`, and airplane mode does not. Pay-as-you-go stays off.
+5. If the server does not answer, keep the on-device coach and label it `offline_rules`. Hold the last Gemini reply for 8 seconds first.
+6. Run three scenes on the Realme: a person, a place with a horizon, and an object on a table. Confirm the live reply says `source=gemini`. Unplug the server and confirm the same scenes still coach on the device.
 
 ## Order
 
-1. C pushes the branch.
-2. A and B open their pull requests against mock JSON.
-3. C merges, installs on the Realme, opens the USB tunnel, and runs the three scenes.
+1. A and B build against mock JSON and open pull requests.
+2. C merges those requests, installs them on the Realme, and opens the USB tunnel.
+3. C sends the current frame to Gemini and runs the three scenes.
 4. Stop. No Cloud Run, no billing upgrade, no API key.
 
 ## Out of scope
 
+- Uploading a sample of the picture the user wishes they had
 - A Gemini API key in the app or in git
 - Pay-as-you-go, or billing on any project other than `project-640ec6f8-36a8-48b1-a57`
 - Scraped example photos

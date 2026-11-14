@@ -1,5 +1,7 @@
 # FrameAI: UI, guidance, and LUT repair plan
 
+This repair list is finished history. The current plan is `docs/three-developer-gemini-coach-plan.md`. The app coaches any subject, and Gemini reads the current camera frame rather than a sample of a wished-for photo.
+
 Reviewed November 14, 2026. [GitHub task tracker](https://github.com/Loc1ran/FrameAI/issues/3).
 
 ## Start from the same build

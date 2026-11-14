@@ -126,7 +126,7 @@ class FrameCameraController(context: Context) {
 
     private fun staticTargetGuide(): LiveGuide = LiveGuide(
         kind = "ALIGN_SUBJECT",
-        message = "Use the grid to place your subject",
+        message = "Use the grid to place any subject",
         targetX = TARGET_X,
         targetY = TARGET_Y,
         subjectX = null,
@@ -137,7 +137,7 @@ class FrameCameraController(context: Context) {
 
     private fun noFaceGuide(): LiveGuide = LiveGuide(
         kind = "NO_FACE",
-        message = "Use the grid to place your subject",
+        message = "Point at any subject. Use the grid to choose a placement.",
         targetX = TARGET_X,
         targetY = TARGET_Y,
         subjectX = null,

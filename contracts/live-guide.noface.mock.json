@@ -1,6 +1,6 @@
 {
   "kind": "NO_FACE",
-  "message": "No face in this view. Use the grid to choose a placement.",
+  "message": "Point at any subject. Use the grid to choose a placement.",
   "targetX": 0.67,
   "targetY": 0.33,
   "subjectX": null,
