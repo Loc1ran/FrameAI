@@ -31,11 +31,14 @@ B owns face detection, the offline guide, LUT grading, and the optional review s
 
 ### LUT
 
-Assets, same bytes in both places:
+Assets, same bytes in both `app/src/main/assets/luts/` and `lut_assets/`:
 
-- `app/src/main/assets/luts/warm_film.cube`
-- `app/src/main/assets/luts/cool_cinema.cube`
-- `app/src/main/assets/luts/identity_4.cube` is for the identity check, not a user preset
+- `warm_film.cube` is the downloaded `Cinematic_04` look
+- `cool_cinema.cube` is the downloaded `Cinematic_08` look
+- `cinematic_01.cube` through `cinematic_10.cube` are the rest of that pack, loadable by those ids
+- `identity_4.cube` is for the identity check, not a user preset
+
+The two chip ids stay `warm_film` and `cool_cinema`. Shot review still may only suggest those or `none`.
 
 `BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`
 

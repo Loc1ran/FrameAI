@@ -127,6 +127,21 @@ class CubeLutTest {
     }
 
     @Test
+    fun downloadedPackFeedsTheFrozenIds() {
+        val warm = frameFile("lut_assets/warm_film.cube").readBytes()
+        val cool = frameFile("lut_assets/cool_cinema.cube").readBytes()
+        assertTrue(warm.contentEquals(frameFile("lut_assets/cinematic_04.cube").readBytes()))
+        assertTrue(cool.contentEquals(frameFile("lut_assets/cinematic_08.cube").readBytes()))
+        for (index in 1..10) {
+            val name = "cinematic_%02d.cube".format(index)
+            val lut = parseCube(frameFile("lut_assets/$name").readText())
+            assertEquals(16, lut.size)
+            val bundled = frameFile("app/src/main/assets/luts/$name").readBytes()
+            assertTrue(bundled.contentEquals(frameFile("lut_assets/$name").readBytes()), name)
+        }
+    }
+
+    @Test
     fun samplePhotosGradeApart() {
         val warmLut = parseCube(frameFile("lut_assets/warm_film.cube").readText())
         val coolLut = parseCube(frameFile("lut_assets/cool_cinema.cube").readText())

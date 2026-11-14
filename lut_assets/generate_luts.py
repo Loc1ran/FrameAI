@@ -131,10 +131,10 @@ def main() -> None:
     self_check()
     ASSET_DIR.mkdir(parents=True, exist_ok=True)
     SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
+    # warm_film and cool_cinema are the downloaded Cinematic_04 and Cinematic_08 files.
+    # This script only refreshes the identity lattice and the sample photos.
     files = {
         "identity_4.cube": (4, None),
-        "warm_film.cube": (17, warm_film),
-        "cool_cinema.cube": (17, cool_cinema),
     }
     for name, (size, grade) in files.items():
         title = name.replace(".cube", "")

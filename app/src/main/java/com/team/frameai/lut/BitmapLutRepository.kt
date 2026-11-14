@@ -56,18 +56,19 @@ class BitmapLutRepository(
         const val PREVIEW_MAX_EDGE = 1024
 
         fun fromAssets(assets: AssetManager): BitmapLutRepository {
-            fun read(id: String): CubeLut {
+            val ids = assets.list("luts").orEmpty()
+                .filter { it.endsWith(".cube") }
+                .map { it.removeSuffix(".cube") }
+                .filter { it != "identity_4" }
+            require(LutIds.WARM_FILM in ids && LutIds.COOL_CINEMA in ids) {
+                "Bundled warm_film and cool_cinema LUTs are missing"
+            }
+            val loaded = ids.associateWith { id ->
                 assets.open("luts/$id.cube").bufferedReader().use { reader ->
-                    return parseCube(reader.readText())
+                    parseCube(reader.readText())
                 }
             }
-            val repository = LutRepository(
-                mapOf(
-                    LutIds.WARM_FILM to read(LutIds.WARM_FILM),
-                    LutIds.COOL_CINEMA to read(LutIds.COOL_CINEMA),
-                ),
-            )
-            return BitmapLutRepository(repository)
+            return BitmapLutRepository(LutRepository(loaded))
         }
     }
 }
