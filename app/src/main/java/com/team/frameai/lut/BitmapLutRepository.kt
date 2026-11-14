@@ -18,6 +18,7 @@ class BitmapLutRepository(
         lutId: String,
         intensity: Float = LutRepository.DEFAULT_INTENSITY,
     ): Bitmap {
+        repository.load(lutId)
         val readable = ensureArgb(source)
         val working = downscale(readable)
         try {
@@ -56,14 +57,14 @@ class BitmapLutRepository(
         const val PREVIEW_MAX_EDGE = 1024
 
         fun fromAssets(assets: AssetManager): BitmapLutRepository {
-            val ids = assets.list("luts").orEmpty()
+            val present = assets.list("luts").orEmpty()
                 .filter { it.endsWith(".cube") }
                 .map { it.removeSuffix(".cube") }
-                .filter { it != "identity_4" }
-            require(LutIds.WARM_FILM in ids && LutIds.COOL_CINEMA in ids) {
+                .toSet()
+            require(LutIds.CREATIVE.all { it in present }) {
                 "Bundled warm_film and cool_cinema LUTs are missing"
             }
-            val loaders = ids.associateWith<String, () -> CubeLut> { id ->
+            val loaders = LutIds.CREATIVE.associateWith<String, () -> CubeLut> { id ->
                 {
                     assets.open("luts/$id.cube").bufferedReader().use { reader ->
                         parseCube(reader.readText())

@@ -95,6 +95,20 @@ class GuideEngineTest {
     }
 
     @Test
+    fun lostFaceDoesNotStayReadyAndTheNextFaceShowsImmediately() {
+        val smoother = GuideSmoother(minIntervalMs = 250, smoothing = 0.5f)
+        val ready = smoother.update(boxAt(0.67f, 0.33f), nowMs = 0)
+        assertEquals(GuideEngine.KIND_READY, ready.kind)
+        val gone = smoother.update(null, nowMs = 40)
+        assertEquals(GuideEngine.KIND_NO_FACE, gone.kind)
+        assertNull(gone.subjectX)
+        assertFalse(gone.isReady)
+        val back = smoother.update(boxAt(0.20f, 0.80f), nowMs = 50)
+        assertEquals(GuideEngine.KIND_ALIGN, back.kind)
+        assertEquals(0.20, back.subjectX!!, 0.0001)
+    }
+
+    @Test
     fun smootherEasesTheBox() {
         val smoother = GuideSmoother(minIntervalMs = 0, smoothing = 0.5f)
         smoother.update(boxAt(0.20f, 0.50f), nowMs = 0)

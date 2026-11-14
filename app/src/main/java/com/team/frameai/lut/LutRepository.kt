@@ -15,11 +15,14 @@ class LutRepository(
     private val cache = HashMap<String, CubeLut>()
 
     fun apply(image: RgbImage, lutId: String, intensity: Float = DEFAULT_INTENSITY): RgbImage {
-        val lut = resolve(lutId)
+        val lut = load(lutId)
         val graded = IntArray(image.pixels.size)
         gradeArgb(image.pixels, graded, lut, intensity.coerceIn(0f, 1f))
         return RgbImage(image.width, image.height, graded)
     }
+
+    /** Resolves a LUT before any pixels are touched. Unknown and malformed files throw. */
+    fun load(lutId: String): CubeLut = resolve(lutId)
 
     fun ids(): Set<String> = luts.keys + loaders.keys
 
