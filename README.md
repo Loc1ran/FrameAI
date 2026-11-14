@@ -30,9 +30,15 @@ Package: `com.team.frameai` · minSdk 26
 
 ## Quick start (Android Studio)
 
-1. Open this folder in Android Studio (Gradle project to be bootstrapped in H+0).
-2. Connect a physical Android phone with USB debugging.
-3. Build/install debug APK and confirm camera permission + preview.
+Developer A owns the camera app on `feat/android-camera`.
+
+1. Install JDK 17 and Android SDK 34.
+2. Open this folder in Android Studio, or from the repo root run `gradlew.bat assembleDebug`.
+3. Connect a physical Android phone with USB debugging and install the debug APK.
+4. Optional cloud coaching stays off until `local.properties` (not committed) contains `frameai.baseUrl` and `frameai.demoToken`.
+5. If the project folder locks build files, set `frameai.buildDir` in `local.properties` to a directory outside that folder.
+
+Face detection and `.cube` LUTs are Developer B. Until those are wired in `MainActivity`, the preview shows the frozen sample guides (labeled Sample) and Apply uses an on-device color preview, not a LUT.
 
 ## Demo journey (90s)
 
