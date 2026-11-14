@@ -7,9 +7,8 @@ import com.team.frameai.model.SceneRead
 import kotlin.math.abs
 
 /**
- * Reads the face that is actually in the frame.
- * A good portrait can sit on either third. The mark follows that choice.
- * Size and clipped edges are judged before placement.
+ * Coaches whatever is in the frame: a person, a horizon, or any other subject.
+ * A person can sit on either third. A scene with no person is still a picture.
  */
 class GuideEngine(
     val toleranceX: Float = DEFAULT_TOLERANCE_X,
@@ -38,20 +37,75 @@ class GuideEngine(
     }
 
     private fun noFace(scene: SceneRead?): LiveGuide {
-        val biased = scene != null && scene.hasSideBias()
-        val targetX = when {
-            scene == null || !biased -> DEFAULT_TARGET_X
-            scene.leftLuma > scene.rightLuma -> THIRD_HI
-            else -> THIRD_LO
-        }
+        if (scene == null) return emptyFrame()
+        val horizon = scene.horizonY
+        if (scene.hasHorizon() && horizon != null) return horizonFrame(scene, horizon)
+        if (scene.hasSideBias()) return openSubject(scene)
+        return readyScene(scene, OPEN_READY)
+    }
+
+    private fun emptyFrame(): LiveGuide {
         return LiveGuide(
             kind = KIND_NO_FACE,
-            message = if (biased) BACKGROUND_MESSAGE else NO_FACE_MESSAGE,
-            targetX = targetX.toDouble(),
+            message = NO_FACE_MESSAGE,
+            targetX = DEFAULT_TARGET_X.toDouble(),
             targetY = DEFAULT_TARGET_Y.toDouble(),
             subjectX = null,
             subjectY = null,
             isReady = false,
+            source = AdviceSource.OFFLINE_RULES.wire,
+        )
+    }
+
+    private fun horizonFrame(scene: SceneRead, horizon: Float): LiveGuide {
+        val targetY = if (abs(horizon - THIRD_LO) <= abs(horizon - THIRD_HI)) THIRD_LO else THIRD_HI
+        val ready = abs(horizon - targetY) <= toleranceY
+        val message = when {
+            ready && scene.warmth < -0.08f -> READY_COOL
+            ready -> HORIZON_READY
+            targetY > 0.5f -> HORIZON_LOWER
+            else -> HORIZON_UPPER
+        }
+        return LiveGuide(
+            kind = if (ready) KIND_READY else KIND_ALIGN,
+            message = message,
+            targetX = 0.5,
+            targetY = targetY.toDouble(),
+            subjectX = null,
+            subjectY = horizon.toDouble(),
+            isReady = ready,
+            source = AdviceSource.OFFLINE_RULES.wire,
+        )
+    }
+
+    private fun openSubject(scene: SceneRead): LiveGuide {
+        val targetX = if (scene.leftLuma > scene.rightLuma) THIRD_HI else THIRD_LO
+        return LiveGuide(
+            kind = KIND_ALIGN,
+            message = PLACE_ANY_MESSAGE,
+            targetX = targetX.toDouble(),
+            targetY = 0.5,
+            subjectX = null,
+            subjectY = null,
+            isReady = false,
+            source = AdviceSource.OFFLINE_RULES.wire,
+        )
+    }
+
+    private fun readyScene(scene: SceneRead, neutral: String): LiveGuide {
+        val message = when {
+            scene.warmth < -0.08f -> READY_COOL
+            scene.warmth > 0.08f -> READY_WARM
+            else -> neutral
+        }
+        return LiveGuide(
+            kind = KIND_READY,
+            message = message,
+            targetX = 0.5,
+            targetY = 0.5,
+            subjectX = null,
+            subjectY = null,
+            isReady = true,
             source = AdviceSource.OFFLINE_RULES.wire,
         )
     }
@@ -72,11 +126,12 @@ class GuideEngine(
             Issue.EDGE -> EDGE_MESSAGE
             Issue.SMALL -> SMALL_MESSAGE
             Issue.LARGE -> LARGE_MESSAGE
-            Issue.PLACE -> if (scene != null && scene.hasSideBias()) BACKGROUND_MESSAGE else ALIGN_MESSAGE
+            Issue.PLACE -> if (scene != null && scene.hasSideBias()) PLACE_ANY_MESSAGE else ALIGN_MESSAGE
             Issue.READY -> when {
                 scene == null -> READY_MESSAGE
                 scene.warmth < -0.08f -> READY_COOL
-                else -> READY_WARM
+                scene.warmth > 0.08f -> READY_WARM
+                else -> READY_MESSAGE
             }
         }
     }
@@ -125,14 +180,18 @@ class GuideEngine(
         const val KIND_READY = "READY"
         const val KIND_NO_FACE = "NO_FACE"
 
-        const val ALIGN_MESSAGE = "The face is off a strong line. Settle it on the marked third."
-        const val EDGE_MESSAGE = "The face is cut off. Bring the whole face inside the frame."
+        const val ALIGN_MESSAGE = "The subject is off a strong line. Settle it on the marked third."
+        const val EDGE_MESSAGE = "The subject is cut off. Bring the whole subject inside the frame."
         const val SMALL_MESSAGE = "The subject is small in this frame. Step closer."
-        const val LARGE_MESSAGE = "The face fills the frame. Leave a little room around it."
-        const val BACKGROUND_MESSAGE = "The background is brighter on one side. Keep the face on the calmer third."
+        const val LARGE_MESSAGE = "The subject fills the frame. Leave a little room around it."
+        const val PLACE_ANY_MESSAGE = "One side is brighter. Put the subject on the calmer third."
+        const val HORIZON_LOWER = "Rest the horizon on the lower grid line."
+        const val HORIZON_UPPER = "Rest the horizon on the upper grid line."
+        const val HORIZON_READY = "The horizon sits on a grid line \u2014 hold steady and shoot"
+        const val OPEN_READY = "This frame can hold any subject \u2014 hold steady and shoot"
         const val READY_MESSAGE = "This part of the frame looks balanced \u2014 hold steady and shoot"
-        const val READY_WARM = "Warm background and the face agree \u2014 hold steady and shoot"
-        const val READY_COOL = "Cool background and the face agree \u2014 hold steady and shoot"
-        const val NO_FACE_MESSAGE = "No face in this view. Use the grid to choose a placement."
+        const val READY_WARM = "Warm light across the frame \u2014 hold steady and shoot"
+        const val READY_COOL = "Cool light across the frame \u2014 hold steady and shoot"
+        const val NO_FACE_MESSAGE = "Point at any subject. Use the grid to choose a placement."
     }
 }

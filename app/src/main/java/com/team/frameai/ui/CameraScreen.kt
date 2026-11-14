@@ -247,7 +247,7 @@ private fun PermissionGate(onAllow: () -> Unit, onSettings: () -> Unit) {
 
 private fun placeholderGuide() = LiveGuide(
     kind = "ALIGN_SUBJECT",
-    message = "No face in this view. Use the grid to choose a placement.",
+    message = "Point at any subject. A person, a place, or an object can fill this frame.",
     targetX = 0.67,
     targetY = 0.33,
     subjectX = 0.48,

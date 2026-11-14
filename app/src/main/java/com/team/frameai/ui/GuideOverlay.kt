@@ -40,8 +40,21 @@ fun GuideOverlay(guide: LiveGuide, area: FaceBoxNormalized?, coachEnabled: Boole
                 drawLine(grid, Offset(0f, y), Offset(w, y), stroke)
             }
             if (!coachEnabled) return@Canvas
-            if (guide.kind == GuideEngine.KIND_NO_FACE && guide.message != GuideEngine.BACKGROUND_MESSAGE) {
+            if (guide.kind == GuideEngine.KIND_NO_FACE && guide.message == GuideEngine.NO_FACE_MESSAGE) {
                 return@Canvas
+            }
+            if (guide.subjectX == null && guide.subjectY != null) {
+                val horizon = guide.subjectY.toFloat() * h
+                drawLine(accent, Offset(0f, horizon), Offset(w, horizon), 2.dp.toPx())
+                if (!guide.isReady) {
+                    val target = guide.targetY.toFloat() * h
+                    drawLine(
+                        accent.copy(alpha = 0.45f),
+                        Offset(0f, target),
+                        Offset(w, target),
+                        2.dp.toPx(),
+                    )
+                }
             }
             if (area != null && area.width > 0.02f && area.height > 0.02f) {
                 drawRoundRect(
@@ -61,7 +74,7 @@ fun GuideOverlay(guide: LiveGuide, area: FaceBoxNormalized?, coachEnabled: Boole
             val sx = guide.subjectX
             val sy = guide.subjectY
             val showMark = (guide.message == GuideEngine.ALIGN_MESSAGE ||
-                guide.message == GuideEngine.BACKGROUND_MESSAGE) &&
+                guide.message == GuideEngine.PLACE_ANY_MESSAGE) &&
                 sx != null &&
                 sy != null &&
                 (abs(sx - guide.targetX) > 0.08 || abs(sy - guide.targetY) > 0.10)

@@ -26,6 +26,12 @@ object ImageSceneSampler {
         var leftCount = 0
         var rightSum = 0f
         var rightCount = 0
+        var topSum = 0f
+        var topCount = 0
+        var bottomSum = 0f
+        var bottomCount = 0
+        val rowSum = FloatArray(GRID)
+        val rowCount = IntArray(GRID)
         var warmthSum = 0f
         var warmthCount = 0
 
@@ -51,6 +57,15 @@ object ImageSceneSampler {
                     rightSum += luma
                     rightCount += 1
                 }
+                if (ny < 0.5f) {
+                    topSum += luma
+                    topCount += 1
+                } else {
+                    bottomSum += luma
+                    bottomCount += 1
+                }
+                rowSum[row] += luma
+                rowCount[row] += 1
                 if (u != null && v != null && uPlane != null && vPlane != null) {
                     val chromaX = (sx * (width / 2)).toInt()
                     val chromaY = (sy * (height / 2)).toInt()
@@ -71,7 +86,27 @@ object ImageSceneSampler {
             leftLuma = leftSum / leftCount,
             rightLuma = rightSum / rightCount,
             warmth = warmth,
+            topLuma = if (topCount == 0) 0.5f else topSum / topCount,
+            bottomLuma = if (bottomCount == 0) 0.5f else bottomSum / bottomCount,
+            horizonY = horizonY(rowSum, rowCount),
         )
+    }
+
+    private fun horizonY(rowSum: FloatArray, rowCount: IntArray): Float? {
+        var best = 0f
+        var at = -1
+        for (row in 0 until GRID - 1) {
+            if (rowCount[row] < 2 || rowCount[row + 1] < 2) continue
+            val above = rowSum[row] / rowCount[row]
+            val below = rowSum[row + 1] / rowCount[row + 1]
+            val strength = kotlin.math.abs(above - below)
+            if (strength > best) {
+                best = strength
+                at = row
+            }
+        }
+        if (at < 0 || best < HORIZON_DROP) return null
+        return (at + 1f) / GRID
     }
 
     private fun inside(nx: Float, ny: Float, face: FaceBoxNormalized): Boolean {
@@ -96,4 +131,5 @@ object ImageSceneSampler {
     }
 
     private const val GRID = 8
+    private const val HORIZON_DROP = 0.18f
 }

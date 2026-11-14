@@ -8,8 +8,13 @@ data class SceneRead(
     val leftLuma: Float,
     val rightLuma: Float,
     val warmth: Float,
+    val topLuma: Float = 0.5f,
+    val bottomLuma: Float = 0.5f,
+    val horizonY: Float? = null,
 ) {
     fun hasSideBias(): Boolean = kotlin.math.abs(leftLuma - rightLuma) > SIDE_BIAS
+
+    fun hasHorizon(): Boolean = horizonY != null
 
     val lookId: String
         get() = if (warmth < -0.08f) LutIds.COOL_CINEMA else LutIds.WARM_FILM
