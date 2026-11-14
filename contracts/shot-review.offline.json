@@ -1,0 +1,9 @@
+{
+  "sceneType": "other",
+  "summary": "Offline tip — cloud coaching unavailable.",
+  "improvement": "Place the subject near a rule-of-thirds intersection and leave clean space behind them.",
+  "principle": "rule of thirds",
+  "suggestedLutId": "warm_film",
+  "lutReason": "Warm Film is a safe default for portraits when AI is offline.",
+  "source": "offline_rules"
+}

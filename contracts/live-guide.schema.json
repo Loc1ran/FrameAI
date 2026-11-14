@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frameai.local/contracts/live-guide.schema.json",
+  "title": "LiveGuide",
+  "type": "object",
+  "required": ["kind", "message", "targetX", "targetY", "isReady", "source"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["ALIGN_SUBJECT", "READY", "NO_FACE"]
+    },
+    "message": { "type": "string", "maxLength": 120 },
+    "targetX": { "type": "number", "minimum": 0, "maximum": 1 },
+    "targetY": { "type": "number", "minimum": 0, "maximum": 1 },
+    "subjectX": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "subjectY": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "isReady": { "type": "boolean" },
+    "source": {
+      "type": "string",
+      "enum": ["offline_rules", "demo_mock", "gemini"]
+    }
+  },
+  "additionalProperties": false
+}

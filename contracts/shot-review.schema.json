@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frameai.local/contracts/shot-review.schema.json",
+  "title": "ShotReview",
+  "type": "object",
+  "required": [
+    "sceneType",
+    "summary",
+    "improvement",
+    "principle",
+    "suggestedLutId",
+    "lutReason",
+    "source"
+  ],
+  "properties": {
+    "sceneType": {
+      "type": "string",
+      "enum": ["portrait", "landscape", "street", "other"]
+    },
+    "summary": { "type": "string", "maxLength": 200 },
+    "improvement": { "type": "string", "maxLength": 200 },
+    "principle": { "type": "string", "maxLength": 80 },
+    "suggestedLutId": {
+      "type": "string",
+      "enum": ["warm_film", "cool_cinema", "none"]
+    },
+    "lutReason": { "type": "string", "maxLength": 160 },
+    "source": {
+      "type": "string",
+      "enum": ["gemini", "offline_rules", "demo_mock"]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,48 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+.gradle/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Python / server
+__pycache__/
+.venv/
+venv/
+*.pyc
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+**/secrets/
+**/credentials*.json
+service-account*.json
+google-services.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs / media dumps
+*.log
+*.hprof
