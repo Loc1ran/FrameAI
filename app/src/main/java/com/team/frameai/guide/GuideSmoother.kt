@@ -1,7 +1,6 @@
 package com.team.frameai.guide
 
 import com.team.frameai.model.FaceBoxNormalized
-import com.team.frameai.model.GuideKind
 import com.team.frameai.model.LiveGuide
 
 /**
@@ -30,7 +29,7 @@ class GuideSmoother(
         return suggestion
     }
 
-    fun lastKind(): GuideKind? = lastGuide?.kind
+    fun lastKind(): String? = lastGuide?.kind
 
     private fun blend(face: FaceBoxNormalized?): FaceBoxNormalized? {
         val prior = smoothed
@@ -45,6 +44,8 @@ class GuideSmoother(
 
     private fun lerpBox(from: FaceBoxNormalized, to: FaceBoxNormalized, weight: Float): FaceBoxNormalized {
         return FaceBoxNormalized(
+            centerX = from.centerX + (to.centerX - from.centerX) * weight,
+            centerY = from.centerY + (to.centerY - from.centerY) * weight,
             left = from.left + (to.left - from.left) * weight,
             top = from.top + (to.top - from.top) * weight,
             right = from.right + (to.right - from.right) * weight,

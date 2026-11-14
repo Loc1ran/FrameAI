@@ -25,7 +25,7 @@ class FaceMappingTest {
         assertPoint(1f, 1f, 90, 0f, 1f)
         assertPoint(0f, 0f, 180, 1f, 1f)
         assertPoint(0f, 0f, 270, 0f, 1f)
-        val sensor = FaceBoxNormalized(0f, 0f, 0.2f, 0.4f)
+        val sensor = FaceBoxNormalized.fromEdges(0f, 0f, 0.2f, 0.4f)
         val upright = FaceBoxMath.sensorBoxToUpright(sensor, 90)
         assertEquals(0.6f, upright.left, 0.0001f)
         assertEquals(0f, upright.top, 0.0001f)
@@ -44,8 +44,8 @@ class FaceMappingTest {
 
     @Test
     fun primaryFaceIsTheLargest() {
-        val small = FaceBoxNormalized(0.1f, 0.1f, 0.2f, 0.2f)
-        val large = FaceBoxNormalized(0.4f, 0.4f, 0.8f, 0.9f)
+        val small = FaceBoxNormalized.fromEdges(0.1f, 0.1f, 0.2f, 0.2f)
+        val large = FaceBoxNormalized.fromEdges(0.4f, 0.4f, 0.8f, 0.9f)
         assertEquals(large, FaceBoxMath.selectPrimary(listOf(small, large)))
         assertNull(FaceBoxMath.selectPrimary(emptyList()))
     }
@@ -70,10 +70,21 @@ class FaceMappingTest {
         assertEquals(0.5f, centerY, 0.0001f)
         val (leftEdge, _) = PreviewCoordinateMapper.mapPoint(0.25f, 0.5f, wide)
         assertEquals(0f, leftEdge, 0.0001f)
-        val visible = FaceBoxNormalized(0.30f, 0.30f, 0.50f, 0.50f)
+        val visible = FaceBoxNormalized.fromEdges(0.30f, 0.30f, 0.50f, 0.50f)
         assertTrue(PreviewCoordinateMapper.mapBox(visible, wide) != null)
-        val croppedAway = FaceBoxNormalized(0.00f, 0.40f, 0.05f, 0.60f)
+        val croppedAway = FaceBoxNormalized.fromEdges(0.00f, 0.40f, 0.05f, 0.60f)
         assertNull(PreviewCoordinateMapper.mapBox(croppedAway, wide))
+    }
+
+    @Test
+    fun uprightBoxRoundTripsToTheSensor() {
+        val sensor = FaceBoxNormalized.fromEdges(0.2f, 0.3f, 0.5f, 0.7f)
+        val upright = FaceBoxMath.sensorBoxToUpright(sensor, 90)
+        val back = FaceBoxMath.uprightBoxToSensor(upright, 90)
+        assertEquals(sensor.left, back.left, 0.0001f)
+        assertEquals(sensor.top, back.top, 0.0001f)
+        assertEquals(sensor.right, back.right, 0.0001f)
+        assertEquals(sensor.bottom, back.bottom, 0.0001f)
     }
 
     private fun assertPoint(nx: Float, ny: Float, rotation: Int, expectedX: Float, expectedY: Float) {

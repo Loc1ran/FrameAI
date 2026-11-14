@@ -1,0 +1,10 @@
+{
+  "kind": "READY",
+  "message": "Framing looks good — hold steady and shoot",
+  "targetX": 0.67,
+  "targetY": 0.33,
+  "subjectX": 0.66,
+  "subjectY": 0.34,
+  "isReady": true,
+  "source": "demo_mock"
+}

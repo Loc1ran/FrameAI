@@ -2,26 +2,26 @@
 
 Branch: `feat/vision-lut`
 
-B owns face detection, the offline guide, LUT grading, and the optional review server. CameraX, Compose, save/review UI, and the release branch stay with Developer A. These files do not edit `MainActivity`.
+B owns face detection, the offline guide, LUT grading, and the optional review server. CameraX, Compose, and save/review UI came from Developer A. `MainActivity` now constructs the detector, `GuideEngine`, and `CubePhotoGrader`.
 
-## What A calls
+## What the camera calls
 
 ### Face
 
-`FaceDetectionAdapter.analyze(imageProxy, viewWidth, viewHeight, mirrorX = false, onResult)`
+`MlKitPrimaryFaceDetector.detectPrimaryFace(imageProxy)` implements `PrimaryFaceDetector`.
 
 - Bundled ML Kit, FAST mode, one primary face, no tracking and no identity.
-- The adapter **closes `imageProxy` on every path**. Register one analyzer with `STRATEGY_KEEP_ONLY_LATEST` and do not close the frame again.
-- `viewWidth` / `viewHeight` are the current `PreviewView` size. If either is 0, the callback returns null.
-- The returned box is in **PreviewView space** after a center-crop (`ScaleType.FILL_CENTER`). `mirrorX` is only for a front camera. The rear-camera demo leaves it false.
-- Null means no face, or the face is outside the crop. Draw the static thirds target. Do not invent a moving box.
-- Dependency A adds: `implementation("com.google.mlkit:face-detection:16.1.7")`
+- The detector **does not close** `imageProxy`. `FrameCameraController` closes it.
+- The returned `RawFaceBox` is in the unrotated buffer. `AnalysisCoordinateMapper` turns that into PreviewView space.
+- Null means no face. A raw face that cannot be mapped keeps the static target. Do not invent a moving box.
+- Dependency: `implementation("com.google.mlkit:face-detection:16.1.7")`
+- `FaceDetectionAdapter` is the older preview-space helper. Do not register it on this camera controller, because it closes the frame.
 
-`FaceDetectionAdapter.kt` and `BitmapLutRepository.kt` are Android-only. The JVM tests compile the rest of `app/src/main/java` and skip those two files. Do not also package the `brain` jar into the app; that project tests these same sources.
+The JVM tests compile `app/src/main/java` and skip Android-only files: `MainActivity`, `ui/`, `camera/`, `ContractJson`, `FaceDetectionAdapter`, `MlKitPrimaryFaceDetector`, `BitmapLutRepository`, and `CubePhotoGrader`. Do not also package the `brain` jar into the app.
 
 ### Guide
 
-`GuideEngine.suggest(faceBox, steady)` returns exactly one `LiveGuide`.
+`GuideEngine.suggest(faceBox, steady)` returns exactly one `LiveGuide`. `kind` and `source` are the contract strings.
 
 - Target `(0.67, 0.33)`. READY when the face center is within ±0.08 x and ±0.10 y. Otherwise ALIGN. Null is NO_FACE.
 - Messages match the frozen mocks. `source` is `offline_rules`.
@@ -39,7 +39,7 @@ The full downloaded library is in `app/src/main/assets/luts/`. `LutPack.looks` i
 
 The demo chips stay `warm_film` and `cool_cinema`. Shot review still may only suggest those or `none`. The other ids include camera-log and film-negative conversions. Those are available in the list, and they are a poor match for a normal phone JPEG.
 
-`BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`
+`CubePhotoGrader` calls `BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`. A failed grade returns a copy of the source.
 
 - Default intensity is `0.7`.
 - Returns a new bitmap. Does not modify or recycle the original.
@@ -57,9 +57,8 @@ The demo chips stay `warm_film` and `cool_cinema`. Shot review still may only su
 
 The guide target is on the **displayed** preview, origin top-left, both axes 0..1.
 
-1. Sensor buffer → upright. Use the frame's `rotationDegrees` (clockwise, 0/90/180/270). ML Kit already returns an upright box when `InputImage.fromMediaImage(image, rotation)` is used. The adapter normalizes that upright box. Do not rotate it a second time.
-2. Upright frame → PreviewView. Center-crop: scale by `max(viewW / analysisW, viewH / analysisH)`, then remove the centered overflow. A face in the cropped-away margin becomes null.
-3. Front camera only: mirror x.
+1. ML Kit returns an upright box when `InputImage.fromMediaImage(image, rotation)` is used. `MlKitPrimaryFaceDetector` converts that box back into the unrotated buffer before returning `RawFaceBox`.
+2. `AnalysisCoordinateMapper` maps the buffer box into the `PreviewView` with CameraX `ImageProxyTransformFactory`. A failed mapping with a raw face keeps the static target.
 
 If the on-phone marker is obviously offset, stop drawing it and keep the static target plus the NO_FACE / ALIGN copy. Say that tracking is an MVP limit. Do not present a wrong box as accurate.
 

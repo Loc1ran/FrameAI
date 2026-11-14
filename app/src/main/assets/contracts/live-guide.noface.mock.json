@@ -1,0 +1,10 @@
+{
+  "kind": "NO_FACE",
+  "message": "Use the grid to place your subject",
+  "targetX": 0.67,
+  "targetY": 0.33,
+  "subjectX": null,
+  "subjectY": null,
+  "isReady": false,
+  "source": "demo_mock"
+}

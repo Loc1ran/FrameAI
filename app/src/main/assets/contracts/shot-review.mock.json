@@ -1,0 +1,9 @@
+{
+  "sceneType": "portrait",
+  "summary": "Backlit portrait with a distracting background.",
+  "improvement": "Move closer or simplify the background around the subject.",
+  "principle": "subject separation",
+  "suggestedLutId": "warm_film",
+  "lutReason": "Warm tones complement the existing evening light.",
+  "source": "demo_mock"
+}

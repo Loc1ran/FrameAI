@@ -1,0 +1,10 @@
+{
+  "kind": "ALIGN_SUBJECT",
+  "message": "Align the face with the target circle",
+  "targetX": 0.67,
+  "targetY": 0.33,
+  "subjectX": 0.48,
+  "subjectY": 0.39,
+  "isReady": false,
+  "source": "demo_mock"
+}

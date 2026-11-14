@@ -16,12 +16,12 @@ class OfflineCoachTest {
     fun everyStateIsLabeledOfflineAndUsesAKnownLut() {
         val guides = listOf(
             engine.suggest(null),
-            engine.suggest(FaceBoxNormalized(0.4f, 0.4f, 0.5f, 0.5f)),
-            engine.suggest(FaceBoxNormalized(0.66f, 0.32f, 0.68f, 0.34f)),
+            engine.suggest(FaceBoxNormalized.fromEdges(0.4f, 0.4f, 0.5f, 0.5f)),
+            engine.suggest(FaceBoxNormalized.fromEdges(0.66f, 0.32f, 0.68f, 0.34f)),
         )
         for (guide in guides) {
             val review = OfflineCoach.review(guide)
-            assertEquals(AdviceSource.OFFLINE_RULES, review.source)
+            assertEquals(AdviceSource.OFFLINE_RULES.wire, review.source)
             assertTrue(review.suggestedLutId in LutIds.SUGGESTABLE)
             assertTrue(review.sceneType in ShotReview.SCENE_TYPES)
             assertTrue(review.summary.contains("Offline tip"))

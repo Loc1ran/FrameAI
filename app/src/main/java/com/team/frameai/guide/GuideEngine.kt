@@ -2,7 +2,6 @@ package com.team.frameai.guide
 
 import com.team.frameai.model.AdviceSource
 import com.team.frameai.model.FaceBoxNormalized
-import com.team.frameai.model.GuideKind
 import com.team.frameai.model.LiveGuide
 import kotlin.math.abs
 
@@ -33,40 +32,40 @@ class GuideEngine(
 
     private fun noFace(): LiveGuide {
         return LiveGuide(
-            kind = GuideKind.NO_FACE,
+            kind = KIND_NO_FACE,
             message = NO_FACE_MESSAGE,
-            targetX = targetX,
-            targetY = targetY,
+            targetX = targetX.toDouble(),
+            targetY = targetY.toDouble(),
             subjectX = null,
             subjectY = null,
             isReady = false,
-            source = AdviceSource.OFFLINE_RULES,
+            source = AdviceSource.OFFLINE_RULES.wire,
         )
     }
 
     private fun ready(faceBox: FaceBoxNormalized): LiveGuide {
         return LiveGuide(
-            kind = GuideKind.READY,
+            kind = KIND_READY,
             message = READY_MESSAGE,
-            targetX = targetX,
-            targetY = targetY,
-            subjectX = faceBox.centerX,
-            subjectY = faceBox.centerY,
+            targetX = targetX.toDouble(),
+            targetY = targetY.toDouble(),
+            subjectX = faceBox.centerX.toDouble(),
+            subjectY = faceBox.centerY.toDouble(),
             isReady = true,
-            source = AdviceSource.OFFLINE_RULES,
+            source = AdviceSource.OFFLINE_RULES.wire,
         )
     }
 
     private fun align(faceBox: FaceBoxNormalized): LiveGuide {
         return LiveGuide(
-            kind = GuideKind.ALIGN_SUBJECT,
+            kind = KIND_ALIGN,
             message = ALIGN_MESSAGE,
-            targetX = targetX,
-            targetY = targetY,
-            subjectX = faceBox.centerX,
-            subjectY = faceBox.centerY,
+            targetX = targetX.toDouble(),
+            targetY = targetY.toDouble(),
+            subjectX = faceBox.centerX.toDouble(),
+            subjectY = faceBox.centerY.toDouble(),
             isReady = false,
-            source = AdviceSource.OFFLINE_RULES,
+            source = AdviceSource.OFFLINE_RULES.wire,
         )
     }
 
@@ -75,6 +74,10 @@ class GuideEngine(
         const val DEFAULT_TARGET_Y = 0.33f
         const val DEFAULT_TOLERANCE_X = 0.08f
         const val DEFAULT_TOLERANCE_Y = 0.10f
+
+        const val KIND_ALIGN = "ALIGN_SUBJECT"
+        const val KIND_READY = "READY"
+        const val KIND_NO_FACE = "NO_FACE"
 
         const val ALIGN_MESSAGE = "Align the face with the target circle"
         const val READY_MESSAGE = "Framing looks good \u2014 hold steady and shoot"

@@ -1,8 +1,9 @@
 package com.team.frameai.model
 
-/**
- * One post-capture coaching note. Field names match contracts/shot-review.schema.json.
- */
+import kotlinx.serialization.Serializable
+
+/** Frozen ShotReview contract. [source] distinguishes Gemini from offline and sample text. */
+@Serializable
 data class ShotReview(
     val sceneType: String,
     val summary: String,
@@ -10,7 +11,7 @@ data class ShotReview(
     val principle: String,
     val suggestedLutId: String,
     val lutReason: String,
-    val source: AdviceSource,
+    val source: String,
 ) {
     init {
         require(sceneType in SCENE_TYPES) { "Unsupported sceneType: $sceneType" }
@@ -19,9 +20,11 @@ data class ShotReview(
         require(improvement.length in 1..200)
         require(principle.length in 1..80)
         require(lutReason.length in 1..160)
+        require(source in SOURCES) { "Unsupported source: $source" }
     }
 
     companion object {
         val SCENE_TYPES = setOf("portrait", "landscape", "street", "other")
+        val SOURCES = setOf("gemini", "offline_rules", "demo_mock")
     }
 }

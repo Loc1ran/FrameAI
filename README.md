@@ -32,9 +32,15 @@ The asset folder also contains the full downloaded library (100+ looks). `LutPac
 
 ## Quick start (Android Studio)
 
-1. Open this folder in Android Studio (Gradle project to be bootstrapped in H+0).
-2. Connect a physical Android phone with USB debugging.
-3. Build/install debug APK and confirm camera permission + preview.
+Developer A owns the camera app on `feat/android-camera`.
+
+1. Install JDK 17 and Android SDK 34.
+2. Open this folder in Android Studio, or from the repo root run `gradlew.bat assembleDebug`.
+3. Connect a physical Android phone with USB debugging and install the debug APK.
+4. Optional cloud coaching stays off until `local.properties` (not committed) contains `frameai.baseUrl` and `frameai.demoToken`.
+5. If the project folder locks build files, set `frameai.buildDir` in `local.properties` to a directory outside that folder.
+
+`MainActivity` uses ML Kit face detection, `GuideEngine`, and the bundled `.cube` grades. Warm Film and Cool Cinema are the review chips. The original JPEG is not overwritten.
 
 ## Demo journey (90s)
 
@@ -56,7 +62,7 @@ Face, guide, and LUT logic live in `app/src/main/java/com/team/frameai/` and are
 brain\gradlew.bat test
 ```
 
-Developer A compiles those sources with the app. Add `com.google.mlkit:face-detection:16.1.7` before the live face adapter will build. The adapter closes each `ImageProxy`; do not close it again.
+Developer A compiles those sources with the app. `MlKitPrimaryFaceDetector` does not close the `ImageProxy`; the camera controller does.
 
 Optional review server, mock mode, from `server/`:
 
