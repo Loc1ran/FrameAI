@@ -23,8 +23,8 @@ class MainActivity : ComponentActivity() {
             FrameAiApp(
                 photoGrader = grader,
                 faceDetector = faceDetector,
-                compositionGuide = CompositionGuide { face, steady ->
-                    guide.suggest(face, steady)
+                compositionGuide = CompositionGuide { face, steady, scene ->
+                    guide.suggest(face, steady, scene)
                 },
             )
         }

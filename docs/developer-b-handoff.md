@@ -100,13 +100,13 @@ py -3 -m pytest
 
 ## Optional server
 
-`GET /health` → `{"status":"ok","aiMode":"mock"}`
+`GET /health` → `{"status":"ok","aiMode":"mock","geminiConfigured":false}`
 
-`POST /v1/shot-review` multipart field `image` plus header `X-Demo-Token`.
+`POST /v1/shot-review` and `POST /v1/live-coach` take a multipart field `image` plus header `X-Demo-Token`.
 
-- `AI_MODE=mock` returns `contracts/shot-review.mock.json` with `source=demo_mock`.
-- `AI_MODE=gemini` calls Gemini only when `GEMINI_API_KEY` is set on the server. One request at a time. Timeout is about 12 seconds.
-- Missing key or any other mode returns 503. The app should show `OfflineCoach`, not a fake Gemini success.
+- `AI_MODE=mock` returns the frozen mock JSON with `source=demo_mock`.
+- `AI_MODE=gemini` calls Gemini when `GEMINI_API_KEY` is set, or when Application Default Credentials and `GOOGLE_CLOUD_PROJECT` are set. One request at a time. Timeout is about 12 seconds. The default model is `gemini-3.5-flash-lite` in location `global`.
+- Missing credentials or any other mode returns 503. The app should show the offline coach, not a fake Gemini success.
 - 401 bad token, 400 not a JPEG, 413 over 2 MB, 429 already busy, 502 provider failure. The response body does not include the key, the image, or the raw provider error.
 
 Do not put `GEMINI_API_KEY`, `DEMO_TOKEN`, or a service-account JSON in the app or in git. Cloud Run deploy stays manual until the offline camera path is already working:
@@ -114,7 +114,7 @@ Do not put `GEMINI_API_KEY`, `DEMO_TOKEN`, or a service-account JSON in the app 
 ```
 gcloud run deploy frameai-coach --source . --region us-central1 \
   --max-instances 1 --min-instances 0 --cpu 1 --memory 512Mi \
-  --set-env-vars AI_MODE=gemini,MODEL_ID=gemini-2.5-flash \
+  --set-env-vars AI_MODE=gemini,MODEL_ID=gemini-3.5-flash-lite,GOOGLE_CLOUD_LOCATION=global \
   --set-secrets GEMINI_API_KEY=frameai-gemini-key:latest,DEMO_TOKEN=frameai-demo-token:latest
 ```
 

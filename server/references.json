@@ -1,0 +1,32 @@
+[
+  {
+    "id": "portrait_space_left",
+    "sceneType": "portrait",
+    "pattern": "Face near the right third, open space on the left, head not cut off, subject height about 30 to 50 percent of the frame."
+  },
+  {
+    "id": "portrait_space_right",
+    "sceneType": "portrait",
+    "pattern": "Face near the left third, open space on the right, head not cut off, subject height about 30 to 50 percent of the frame."
+  },
+  {
+    "id": "landscape_low_horizon",
+    "sceneType": "landscape",
+    "pattern": "Horizon near the lower third. Sky is the larger area. No face is required."
+  },
+  {
+    "id": "landscape_high_horizon",
+    "sceneType": "landscape",
+    "pattern": "Horizon near the upper third. Land is the larger area. No face is required."
+  },
+  {
+    "id": "landscape_subject_small",
+    "sceneType": "landscape",
+    "pattern": "One clear subject, small in the frame, placed on a third rather than dead center."
+  },
+  {
+    "id": "street_layer",
+    "sceneType": "other",
+    "pattern": "Foreground, subject, and background are separated. The subject is not glued to the edge."
+  }
+]

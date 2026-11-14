@@ -64,16 +64,25 @@ brain\gradlew.bat test
 
 Developer A compiles those sources with the app. `MlKitPrimaryFaceDetector` does not close the `ImageProxy`; the camera controller does.
 
-Optional review server, mock mode, from `server/`:
+Shared AI server, from `server/`. Other developers call this. Credentials stay on the machine that runs the server and are not committed.
 
 ```
-py -3 -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-$env:AI_MODE = "mock"
-$env:DEMO_TOKEN = "localtest"
-uvicorn main:app --host 127.0.0.1 --port 8080
+copy ..\.env.example .env
 ```
+
+Google Cloud login, when an API key is not available:
+
+```
+powershell -c "iex (irm https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.ps1)"
+```
+
+Put the project ID in `GOOGLE_CLOUD_PROJECT`, set `AI_MODE=gemini`, and leave `GEMINI_API_KEY` empty. An API key in `GEMINI_API_KEY` still works and does not need that login. Then:
+
+```
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8080
+```
+
+`GET /health` shows `geminiConfigured` without revealing the key. `POST /v1/live-coach` and `POST /v1/shot-review` take a JPEG field named `image` and the header `X-Demo-Token`. `AI_MODE=mock` needs no key and returns the frozen demo JSON.
 
 Handoff details: `docs/developer-b-handoff.md`.
 

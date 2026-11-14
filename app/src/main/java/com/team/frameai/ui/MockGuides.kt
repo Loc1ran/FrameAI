@@ -24,7 +24,7 @@ internal fun loadOfflineReview(context: Context): ShotReview {
 internal fun sourceLabel(source: String): String = when (source) {
     "gemini" -> "Gemini"
     "demo_mock" -> "Sample"
-    else -> "Offline tip"
+    else -> "Frame check"
 }
 
 internal fun lutLabel(lutId: String): String = when (lutId) {

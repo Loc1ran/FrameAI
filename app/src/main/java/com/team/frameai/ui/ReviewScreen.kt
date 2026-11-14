@@ -47,6 +47,7 @@ fun ReviewScreen(
     originalPath: String,
     capturedAt: String,
     photoGrader: PhotoGrader,
+    suggestedLut: String = "warm_film",
     onRetake: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -60,7 +61,7 @@ fun ReviewScreen(
     }
     var original by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var graded by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var selectedLut by remember { mutableStateOf("warm_film") }
+    var selectedLut by remember { mutableStateOf(suggestedLut) }
     var showEdited by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -72,7 +73,23 @@ fun ReviewScreen(
         original = withContext(Dispatchers.Default) {
             ImageSaver.decodeOriented(originalPath, maxEdge = 2048)
         }
-        if (original == null) status = "Could not open the original photo"
+        val source = original
+        if (source == null) {
+            status = "Could not open the original photo"
+            return@LaunchedEffect
+        }
+        try {
+            val result = withContext(Dispatchers.Default) {
+                photoGrader.apply(source, selectedLut, 0.85f)
+            }
+            graded = result
+            showEdited = true
+            status = "Adjusted with ${lutLabel(selectedLut)} from the background."
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            status = "Could not grade this photo"
+        }
     }
 
     val shown = if (showEdited && graded != null) graded else original
