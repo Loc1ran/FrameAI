@@ -142,19 +142,55 @@ class CubeLutTest {
     }
 
     @Test
-    fun downloadedLibraryIsSelectableAndParses() {
+    fun catalogOffersOnlyTheTwoPhoneLooks() {
         val dir = frameFile("app/src/main/assets/luts")
         val cubes = dir.listFiles { file -> file.extension.equals("cube", ignoreCase = true) }!!
-            .filter { it.nameWithoutExtension != "identity_4" }
-        assertTrue(LutPack.looks.size > 100)
-        assertEquals(cubes.map { it.nameWithoutExtension }.toSet(), LutPack.ids)
-        assertEquals(LutPack.looks.size, LutPack.ids.size)
-        assertTrue(LutIds.WARM_FILM in LutPack.ids)
-        assertTrue(LutIds.COOL_CINEMA in LutPack.ids)
+        assertTrue(cubes.size > 100, "the downloaded library stays on disk")
+        assertEquals(listOf(LutIds.WARM_FILM, LutIds.COOL_CINEMA), LutPack.looks.map { it.id })
+        assertEquals(setOf(LutIds.WARM_FILM, LutIds.COOL_CINEMA), LutPack.ids)
+        assertEquals("cinematic_04.cube", LutPack.looks[0].sourceAsset)
+        assertEquals("cinematic_08.cube", LutPack.looks[1].sourceAsset)
+        assertFalse(LutPack.ids.contains("alexa_logc_to_rec709"))
         for (file in cubes) {
             val lut = parseCube(file.readText())
             assertTrue(lut.size in 2..64, file.name)
         }
+    }
+
+    @Test
+    fun phoneLooksAtReviewStrengthStayVisibleWithoutClipping() {
+        val repository = LutRepository(
+            mapOf(
+                LutIds.WARM_FILM to parseCube(frameFile("app/src/main/assets/luts/warm_film.cube").readText()),
+                LutIds.COOL_CINEMA to parseCube(frameFile("app/src/main/assets/luts/cool_cinema.cube").readText()),
+            ),
+        )
+        val neutral = argb(128, 128, 128)
+        val before = intArrayOf(neutral)
+        val warm = repository.apply(RgbImage(1, 1, intArrayOf(neutral)), LutIds.WARM_FILM, LutPack.REVIEW_INTENSITY)
+        val cool = repository.apply(RgbImage(1, 1, intArrayOf(neutral)), LutIds.COOL_CINEMA, LutPack.REVIEW_INTENSITY)
+        assertTrue(before.contentEquals(intArrayOf(neutral)))
+        assertTrue(channel(warm.pixels[0], 0) > channel(warm.pixels[0], 2))
+        assertTrue(channel(cool.pixels[0], 2) > channel(cool.pixels[0], 0))
+        assertTrue(warm.pixels[0] != cool.pixels[0])
+        assertTrue(warm.pixels[0] != neutral && cool.pixels[0] != neutral)
+        for (pixel in listOf(warm.pixels[0], cool.pixels[0])) {
+            for (index in 0..2) {
+                val value = channel(pixel, index)
+                assertTrue(value in 1..254, "neutral channel $index clipped to $value")
+            }
+        }
+        val dark = repository.apply(RgbImage(1, 1, intArrayOf(argb(8, 8, 8))), LutIds.WARM_FILM, LutPack.REVIEW_INTENSITY)
+        val bright = repository.apply(RgbImage(1, 1, intArrayOf(argb(250, 250, 250))), LutIds.COOL_CINEMA, LutPack.REVIEW_INTENSITY)
+        assertTrue((0..2).all { channel(dark.pixels[0], it) < 80 })
+        assertTrue((0..2).all { channel(bright.pixels[0], it) > 200 })
+        val skin = repository.apply(
+            RgbImage(1, 1, intArrayOf(argb(199, 140, 107))),
+            LutIds.WARM_FILM,
+            LutPack.REVIEW_INTENSITY,
+        ).pixels[0]
+        assertTrue(channel(skin, 0) > channel(skin, 1) && channel(skin, 1) > channel(skin, 2))
+        assertTrue(channel(skin, 0) in 1..254 && channel(skin, 2) in 1..254)
     }
 
     @Test

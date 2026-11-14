@@ -28,7 +28,7 @@ Package: `com.team.frameai` · minSdk 26
 - `warm_film`
 - `cool_cinema`
 
-The asset folder also contains the full downloaded library (100+ looks). `LutPack.looks` lists them. Gemini may still only suggest the two ids above, or `none`.
+The review screen offers only those two looks. `warm_film` is the packaged `cinematic_04` file and `cool_cinema` is `cinematic_08`, applied at strength 0.85. Other files in the asset folder are not selectable. Shot review may suggest only these two ids, or `none`.
 
 ## Quick start (Android Studio)
 

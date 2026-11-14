@@ -27,25 +27,45 @@ The JVM tests compile `app/src/main/java` and skip Android-only files: `MainActi
 - Messages match the frozen mocks. `source` is `offline_rules`.
 - Hints do not say "move left" or "move right".
 - `steady` is accepted and does not add a second tip.
-- `GuideSmoother` eases the box and emits about 4 times per second. A face appearing or disappearing is delivered immediately.
+- `GuideSmoother` eases the box and emits about 4 times per second. A face appearing or disappearing is delivered immediately. A lost face is `NO_FACE` even inside the throttle window, so a previous READY cannot linger.
+- `MainActivity` still calls `GuideEngine` directly. A4 should wrap that call with `GuideSmoother` once the preview transform is trusted. B does not edit the camera screen for this.
+
+### A4 geometry and copy
+
+These constants in `GuideEngine` are the source of truth. Do not draw a fixed 42dp ring and call it the ready area.
+
+| | Value |
+|---|---|
+| Target | `(0.67, 0.33)` in PreviewView space, origin top-left |
+| Ready when | face center is within `±0.08` x and `±0.10` y of the target, inclusive |
+| Otherwise, with a face | `ALIGN_SUBJECT` |
+| No face | `NO_FACE`, subject coordinates null |
+
+Draw the target as an ellipse of half-width `0.08` and half-height `0.10` of the preview, in the same normalized space. The dot is the face center. Do not add "move left" or "move right".
+
+Copy, already matched to the frozen mocks:
+
+- ALIGN: `Align the face with the target circle`
+- READY: `Framing looks good — hold steady and shoot`
+- NO_FACE: `Use the grid to place your subject`
+
+`source` stays `offline_rules`. `kind` stays one of the three contract strings.
 
 ### LUT
 
-The full downloaded library is in `app/src/main/assets/luts/`. `LutPack.looks` is the selectable list, loaded one file at a time.
+`LutPack.looks` is only Warm Film and Cool Cinema. The other `.cube` files stay in `app/src/main/assets/luts/` and are not loaded or offered. Several are camera-log conversions and must not be applied to a normal phone JPEG.
 
-- `warm_film` is the downloaded `Cinematic_04` look
-- `cool_cinema` is the downloaded `Cinematic_08` look
+- `warm_film` is the downloaded `cinematic_04.cube`
+- `cool_cinema` is the downloaded `cinematic_08.cube`
 - `identity_4.cube` is for the identity check and is not a user preset
+- Review strength is `LutPack.REVIEW_INTENSITY` (`0.85`). The repository default of `0.7` is not what the screen uses.
 
-The demo chips stay `warm_film` and `cool_cinema`. Shot review still may only suggest those or `none`. The other ids include camera-log and film-negative conversions. Those are available in the list, and they are a poor match for a normal phone JPEG.
+`CubePhotoGrader` calls `BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`. The LUT is resolved before the bitmap is read. Unknown ids throw `UnknownLutException`. Malformed cubes throw `CubeParseException`. Neither failure is turned into a copy of the original.
 
-`CubePhotoGrader` calls `BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`. A failed grade returns a copy of the source.
-
-- Default intensity is `0.7`.
 - Returns a new bitmap. Does not modify or recycle the original.
 - Long edge above 1024 px is graded at 1024. Call this off the main thread.
-- Unknown ids throw `UnknownLutException`.
 - Warm Film and Cool Cinema are the SDR looks for a normal JPEG. This is a still-photo grade, not a live GPU preview.
+- At strength 0.85, neutral gray stays off the 0 and 255 rails, warm raises red over blue, and cool raises blue over red. Dark values stay dark and bright values stay bright.
 
 ### Offline coaching
 
