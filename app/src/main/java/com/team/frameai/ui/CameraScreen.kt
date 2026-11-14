@@ -58,7 +58,7 @@ import java.io.File
 fun CameraScreen(
     faceDetector: PrimaryFaceDetector?,
     compositionGuide: CompositionGuide?,
-    onCaptured: (File, String) -> Unit,
+    onCaptured: (File, String, String) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -71,6 +71,7 @@ fun CameraScreen(
     }
     var asked by rememberSaveable { mutableStateOf(false) }
     var guide by remember { mutableStateOf(placeholderGuide()) }
+    var area by remember { mutableStateOf<com.team.frameai.model.FaceBoxNormalized?>(null) }
     var coachEnabled by rememberSaveable { mutableStateOf(true) }
     var sampleIndex by rememberSaveable { mutableIntStateOf(0) }
     var capturing by remember { mutableStateOf(false) }
@@ -101,7 +102,10 @@ fun CameraScreen(
     DisposableEffect(lifecycleOwner, granted, faceDetector, compositionGuide) {
         controller.detector = faceDetector
         controller.compositionGuide = compositionGuide
-        controller.onGuide = { guide = it }
+        controller.onGuide = { next, box ->
+            guide = next
+            area = box
+        }
         if (granted) {
             controller.start(lifecycleOwner)
             if (faceDetector != null) controller.enableAnalysis() else controller.disableAnalysis()
@@ -122,20 +126,22 @@ fun CameraScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(FrameInk)) {
+    Box(Modifier.fillMaxSize()) {
         if (granted) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { viewContext ->
                     PreviewView(viewContext).apply {
                         scaleType = PreviewView.ScaleType.FILL_CENTER
-                        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                        // TextureView stays black under Compose on this phone even while
+                        // frames are arriving. SurfaceView is the mode that actually shows.
+                        implementationMode = PreviewView.ImplementationMode.PERFORMANCE
                         this.controller = controller.lifecycleController
                     }
                 },
                 update = { view -> controller.previewView = view },
             )
-            GuideOverlay(guide = guide, coachEnabled = coachEnabled)
+            GuideOverlay(guide = guide, area = area, coachEnabled = coachEnabled)
         } else {
             PermissionGate(
                 onAllow = { launcher.launch(Manifest.permission.CAMERA) },
@@ -206,7 +212,7 @@ fun CameraScreen(
                                 file = file,
                                 onSaved = {
                                     capturing = false
-                                    onCaptured(file, stamp)
+                                    onCaptured(file, stamp, controller.suggestedLutId)
                                 },
                                 onError = { message ->
                                     capturing = false
@@ -241,7 +247,7 @@ private fun PermissionGate(onAllow: () -> Unit, onSettings: () -> Unit) {
 
 private fun placeholderGuide() = LiveGuide(
     kind = "ALIGN_SUBJECT",
-    message = "Align the face with the target circle",
+    message = "No face in this view. Use the grid to choose a placement.",
     targetX = 0.67,
     targetY = 0.33,
     subjectX = 0.48,

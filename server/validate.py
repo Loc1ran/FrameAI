@@ -21,8 +21,10 @@ def _local_schema(name: str) -> dict:
 
 SHOT_REVIEW_SCHEMA = _local_schema("shot-review.schema.json")
 LIVE_GUIDE_SCHEMA = _local_schema("live-guide.schema.json")
+LIVE_COACH_SCHEMA = _local_schema("live-coach.schema.json")
 SHOT_REVIEW_VALIDATOR = Draft202012Validator(SHOT_REVIEW_SCHEMA)
 LIVE_GUIDE_VALIDATOR = Draft202012Validator(LIVE_GUIDE_SCHEMA)
+LIVE_COACH_VALIDATOR = Draft202012Validator(LIVE_COACH_SCHEMA)
 
 ALLOWED_SHOT_KEYS = {
     "sceneType",
@@ -31,6 +33,21 @@ ALLOWED_SHOT_KEYS = {
     "principle",
     "suggestedLutId",
     "lutReason",
+    "source",
+}
+
+ALLOWED_COACH_KEYS = {
+    "sceneType",
+    "subject",
+    "referenceId",
+    "message",
+    "zoom",
+    "targetZoomRatio",
+    "targetX",
+    "targetY",
+    "subjectX",
+    "subjectY",
+    "isReady",
     "source",
 }
 
@@ -45,12 +62,29 @@ def validate_live_guide(payload: dict) -> dict:
     return payload
 
 
+def validate_live_coach(payload: dict) -> dict:
+    LIVE_COACH_VALIDATOR.validate(payload)
+    return payload
+
+
 def normalize_gemini_payload(payload: object) -> dict:
     if not isinstance(payload, dict):
         raise ValidationError("model output was not a JSON object")
     cleaned = {key: payload[key] for key in ALLOWED_SHOT_KEYS if key in payload}
     cleaned["source"] = "gemini"
     return validate_shot_review(cleaned)
+
+
+def normalize_live_coach(payload: object) -> dict:
+    if not isinstance(payload, dict):
+        raise ValidationError("model output was not a JSON object")
+    cleaned = {key: payload[key] for key in ALLOWED_COACH_KEYS if key in payload}
+    cleaned["source"] = "gemini"
+    if "subjectX" not in cleaned:
+        cleaned["subjectX"] = None
+    if "subjectY" not in cleaned:
+        cleaned["subjectY"] = None
+    return validate_live_coach(cleaned)
 
 
 def load_json(name: str) -> dict:

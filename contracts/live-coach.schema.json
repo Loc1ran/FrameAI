@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frameai.local/contracts/live-coach.schema.json",
+  "title": "LiveCoach",
+  "type": "object",
+  "required": [
+    "sceneType",
+    "subject",
+    "referenceId",
+    "message",
+    "zoom",
+    "targetZoomRatio",
+    "targetX",
+    "targetY",
+    "isReady",
+    "source"
+  ],
+  "properties": {
+    "sceneType": {
+      "type": "string",
+      "enum": ["portrait", "landscape", "other"]
+    },
+    "subject": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "referenceId": {
+      "type": "string",
+      "enum": [
+        "portrait_space_left",
+        "portrait_space_right",
+        "landscape_low_horizon",
+        "landscape_high_horizon",
+        "landscape_subject_small",
+        "street_layer",
+        "none"
+      ]
+    },
+    "message": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "zoom": { "type": "string", "enum": ["in", "out", "hold"] },
+    "targetZoomRatio": { "type": "number", "minimum": 1, "maximum": 8 },
+    "targetX": { "type": "number", "minimum": 0, "maximum": 1 },
+    "targetY": { "type": "number", "minimum": 0, "maximum": 1 },
+    "subjectX": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "subjectY": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "isReady": { "type": "boolean" },
+    "source": { "type": "string", "enum": ["gemini", "offline_rules", "demo_mock"] }
+  },
+  "additionalProperties": false
+}

@@ -20,15 +20,17 @@ fun FrameAiApp(
     var route by rememberSaveable { mutableStateOf(CameraRoute) }
     var photoPath by rememberSaveable { mutableStateOf("") }
     var photoStamp by rememberSaveable { mutableStateOf("") }
+    var suggestedLut by rememberSaveable { mutableStateOf("warm_film") }
 
     FrameAiTheme {
         if (route == CameraRoute || photoPath.isEmpty()) {
             CameraScreen(
                 faceDetector = faceDetector,
                 compositionGuide = compositionGuide,
-                onCaptured = { file, stamp ->
+                onCaptured = { file, stamp, lutId ->
                     photoPath = file.absolutePath
                     photoStamp = stamp
+                    suggestedLut = lutId
                     route = "review"
                 },
             )
@@ -37,6 +39,7 @@ fun FrameAiApp(
                 originalPath = photoPath,
                 capturedAt = photoStamp,
                 photoGrader = photoGrader,
+                suggestedLut = suggestedLut,
                 onRetake = {
                     route = CameraRoute
                     photoPath = ""
