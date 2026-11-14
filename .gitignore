@@ -21,6 +21,7 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+.kotlin/
 
 # Python / server
 __pycache__/
