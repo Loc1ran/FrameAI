@@ -28,6 +28,8 @@ Package: `com.team.frameai` · minSdk 26
 - `warm_film`
 - `cool_cinema`
 
+The asset folder also contains the full downloaded library (100+ looks). `LutPack.looks` lists them. Gemini may still only suggest the two ids above, or `none`.
+
 ## Quick start (Android Studio)
 
 Developer A owns the camera app on `feat/android-camera`.
@@ -38,7 +40,7 @@ Developer A owns the camera app on `feat/android-camera`.
 4. Optional cloud coaching stays off until `local.properties` (not committed) contains `frameai.baseUrl` and `frameai.demoToken`.
 5. If the project folder locks build files, set `frameai.buildDir` in `local.properties` to a directory outside that folder.
 
-Face detection and `.cube` LUTs are Developer B. Until those are wired in `MainActivity`, the preview shows the frozen sample guides (labeled Sample) and Apply uses an on-device color preview, not a LUT.
+`MainActivity` uses ML Kit face detection, `GuideEngine`, and the bundled `.cube` grades. Warm Film and Cool Cinema are the review chips. The original JPEG is not overwritten.
 
 ## Demo journey (90s)
 
@@ -51,6 +53,29 @@ Face detection and `.cube` LUTs are Developer B. Until those are wired in `MainA
 ## Contracts
 
 See `contracts/` for LiveGuide and ShotReview JSON schemas and mocks.
+
+## Developer B modules
+
+Face, guide, and LUT logic live in `app/src/main/java/com/team/frameai/` and are unit-tested from `brain/` without a phone:
+
+```
+brain\gradlew.bat test
+```
+
+Developer A compiles those sources with the app. `MlKitPrimaryFaceDetector` does not close the `ImageProxy`; the camera controller does.
+
+Optional review server, mock mode, from `server/`:
+
+```
+py -3 -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+$env:AI_MODE = "mock"
+$env:DEMO_TOKEN = "localtest"
+uvicorn main:app --host 127.0.0.1 --port 8080
+```
+
+Handoff details: `docs/developer-b-handoff.md`.
 
 ## Safety
 

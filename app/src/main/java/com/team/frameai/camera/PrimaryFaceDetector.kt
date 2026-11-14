@@ -6,7 +6,7 @@ import com.team.frameai.model.RawFaceBox
 fun interface PrimaryFaceDetector {
     /**
      * Detect one face in raw buffer space. Null means no face.
-     * Developer B implements this in vision/FaceDetectionAdapter.
+     * The implementation is vision/MlKitPrimaryFaceDetector. It must not close the ImageProxy.
      */
     fun detectPrimaryFace(image: ImageProxy): RawFaceBox?
 }

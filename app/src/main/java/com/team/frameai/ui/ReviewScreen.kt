@@ -235,7 +235,7 @@ fun ReviewScreen(
         coaching?.let { review -> CoachingCard(review) }
         status?.let { Text(it, color = FrameGold, modifier = Modifier.padding(top = 8.dp)) }
         Text(
-            "On-device color preview until the LUT pack is connected. The original JPEG is not overwritten.",
+            "Warm Film and Cool Cinema are on-device cube grades. The original JPEG is not overwritten.",
             color = FrameMuted,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 12.dp, bottom = 24.dp),
