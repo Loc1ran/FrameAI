@@ -28,6 +28,8 @@ Package: `com.team.frameai` · minSdk 26
 - `warm_film`
 - `cool_cinema`
 
+The asset folder also contains the full downloaded library (100+ looks). `LutPack.looks` lists them. Gemini may still only suggest the two ids above, or `none`.
+
 ## Quick start (Android Studio)
 
 1. Open this folder in Android Studio (Gradle project to be bootstrapped in H+0).

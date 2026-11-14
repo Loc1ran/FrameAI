@@ -63,12 +63,14 @@ class BitmapLutRepository(
             require(LutIds.WARM_FILM in ids && LutIds.COOL_CINEMA in ids) {
                 "Bundled warm_film and cool_cinema LUTs are missing"
             }
-            val loaded = ids.associateWith { id ->
-                assets.open("luts/$id.cube").bufferedReader().use { reader ->
-                    parseCube(reader.readText())
+            val loaders = ids.associateWith<String, () -> CubeLut> { id ->
+                {
+                    assets.open("luts/$id.cube").bufferedReader().use { reader ->
+                        parseCube(reader.readText())
+                    }
                 }
             }
-            return BitmapLutRepository(LutRepository(loaded))
+            return BitmapLutRepository(LutRepository(loaders = loaders))
         }
     }
 }

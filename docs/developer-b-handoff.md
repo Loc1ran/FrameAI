@@ -31,14 +31,13 @@ B owns face detection, the offline guide, LUT grading, and the optional review s
 
 ### LUT
 
-Assets, same bytes in both `app/src/main/assets/luts/` and `lut_assets/`:
+The full downloaded library is in `app/src/main/assets/luts/`. `LutPack.looks` is the selectable list, loaded one file at a time.
 
-- `warm_film.cube` is the downloaded `Cinematic_04` look
-- `cool_cinema.cube` is the downloaded `Cinematic_08` look
-- `cinematic_01.cube` through `cinematic_10.cube` are the rest of that pack, loadable by those ids
-- `identity_4.cube` is for the identity check, not a user preset
+- `warm_film` is the downloaded `Cinematic_04` look
+- `cool_cinema` is the downloaded `Cinematic_08` look
+- `identity_4.cube` is for the identity check and is not a user preset
 
-The two chip ids stay `warm_film` and `cool_cinema`. Shot review still may only suggest those or `none`.
+The demo chips stay `warm_film` and `cool_cinema`. Shot review still may only suggest those or `none`. The other ids include camera-log and film-negative conversions. Those are available in the list, and they are a poor match for a normal phone JPEG.
 
 `BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`
 
@@ -46,7 +45,7 @@ The two chip ids stay `warm_film` and `cool_cinema`. Shot review still may only 
 - Returns a new bitmap. Does not modify or recycle the original.
 - Long edge above 1024 px is graded at 1024. Call this off the main thread.
 - Unknown ids throw `UnknownLutException`.
-- These are SDR creative looks for normal JPEGs, not log-to-Rec.709 LUTs, and not a live GPU preview.
+- Warm Film and Cool Cinema are the SDR looks for a normal JPEG. This is a still-photo grade, not a live GPU preview.
 
 ### Offline coaching
 

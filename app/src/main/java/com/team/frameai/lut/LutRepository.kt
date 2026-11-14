@@ -9,16 +9,30 @@ class UnknownLutException(val lutId: String) : IllegalArgumentException("Unknown
  * This is a still-photo grade, not a live GPU preview.
  */
 class LutRepository(
-    private val luts: Map<String, CubeLut>,
+    private val luts: Map<String, CubeLut> = emptyMap(),
+    private val loaders: Map<String, () -> CubeLut> = emptyMap(),
 ) {
+    private val cache = HashMap<String, CubeLut>()
+
     fun apply(image: RgbImage, lutId: String, intensity: Float = DEFAULT_INTENSITY): RgbImage {
-        val lut = luts[lutId] ?: throw UnknownLutException(lutId)
+        val lut = resolve(lutId)
         val graded = IntArray(image.pixels.size)
         gradeArgb(image.pixels, graded, lut, intensity.coerceIn(0f, 1f))
         return RgbImage(image.width, image.height, graded)
     }
 
-    fun ids(): Set<String> = luts.keys
+    fun ids(): Set<String> = luts.keys + loaders.keys
+
+    private fun resolve(lutId: String): CubeLut {
+        luts[lutId]?.let { return it }
+        synchronized(cache) {
+            cache[lutId]?.let { return it }
+            val loader = loaders[lutId] ?: throw UnknownLutException(lutId)
+            val loaded = loader()
+            cache[lutId] = loaded
+            return loaded
+        }
+    }
 
     companion object {
         const val DEFAULT_INTENSITY = 0.7f

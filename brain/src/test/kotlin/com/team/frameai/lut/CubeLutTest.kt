@@ -142,6 +142,22 @@ class CubeLutTest {
     }
 
     @Test
+    fun downloadedLibraryIsSelectableAndParses() {
+        val dir = frameFile("app/src/main/assets/luts")
+        val cubes = dir.listFiles { file -> file.extension.equals("cube", ignoreCase = true) }!!
+            .filter { it.nameWithoutExtension != "identity_4" }
+        assertTrue(LutPack.looks.size > 100)
+        assertEquals(cubes.map { it.nameWithoutExtension }.toSet(), LutPack.ids)
+        assertEquals(LutPack.looks.size, LutPack.ids.size)
+        assertTrue(LutIds.WARM_FILM in LutPack.ids)
+        assertTrue(LutIds.COOL_CINEMA in LutPack.ids)
+        for (file in cubes) {
+            val lut = parseCube(file.readText())
+            assertTrue(lut.size in 2..64, file.name)
+        }
+    }
+
+    @Test
     fun samplePhotosGradeApart() {
         val warmLut = parseCube(frameFile("lut_assets/warm_film.cube").readText())
         val coolLut = parseCube(frameFile("lut_assets/cool_cinema.cube").readText())
