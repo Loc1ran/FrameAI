@@ -46,6 +46,29 @@ Package: `com.team.frameai` · minSdk 26
 
 See `contracts/` for LiveGuide and ShotReview JSON schemas and mocks.
 
+## Developer B modules
+
+Face, guide, and LUT logic live in `app/src/main/java/com/team/frameai/` and are unit-tested from `brain/` without a phone:
+
+```
+brain\gradlew.bat test
+```
+
+Developer A compiles those sources with the app. Add `com.google.mlkit:face-detection:16.1.7` before the live face adapter will build. The adapter closes each `ImageProxy`; do not close it again.
+
+Optional review server, mock mode, from `server/`:
+
+```
+py -3 -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+$env:AI_MODE = "mock"
+$env:DEMO_TOKEN = "localtest"
+uvicorn main:app --host 127.0.0.1 --port 8080
+```
+
+Handoff details: `docs/developer-b-handoff.md`.
+
 ## Safety
 
 Never commit API keys, Cloud Run tokens, or `.env` files. Cloud is optional; offline P0 must work in airplane mode.
