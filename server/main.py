@@ -14,8 +14,9 @@ import logging
 import os
 import threading
 from pathlib import Path
+from typing import Literal
 
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile, Response
 
 from gemini_client import GeminiNotConfigured, coach_image, review_image
 from validate import load_json, validate_live_coach, validate_shot_review
@@ -117,14 +118,21 @@ async def shot_review(
 
 @app.post("/v1/live-coach")
 async def live_coach(
+    response: Response,
+    composition: Literal["subject", "scene"] = "subject",
     image: UploadFile = File(...),
     x_demo_token: str | None = Header(default=None),
 ) -> dict:
     if not _authorized(x_demo_token):
         raise HTTPException(status_code=401, detail="Unauthorized")
+    response.headers["X-FrameAI-Composition"] = composition
     payload = await _read_jpeg(image)
     mode = os.environ.get("AI_MODE", "mock").strip().lower()
     if mode == "mock":
+        if composition == "scene":
+            return {**_LIVE_MOCK, "subject": "Demo scene — no image analysis",
+                    "referenceId": "none", "message": "Demo only: keep the action and its surroundings visible.",
+                    "zoom": "hold", "targetZoomRatio": 1, "isReady": False}
         return dict(_LIVE_MOCK)
     if mode != "gemini":
         raise HTTPException(status_code=503, detail="AI is not configured")
@@ -135,7 +143,7 @@ async def live_coach(
     try:
         model_id = os.environ.get("MODEL_ID", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        return coach_image(payload, api_key, model_id)
+        return coach_image(payload, api_key, model_id, composition="scene") if composition == "scene" else coach_image(payload, api_key, model_id)
     except GeminiNotConfigured:
         raise HTTPException(status_code=503, detail="AI is not configured")
     except Exception as exc:

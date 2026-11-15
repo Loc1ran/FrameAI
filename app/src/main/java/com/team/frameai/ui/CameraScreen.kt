@@ -33,6 +33,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.team.frameai.guide.CompositionMode
+import com.team.frameai.guide.SceneComposition
 import com.team.frameai.BuildConfig
 import com.team.frameai.camera.*
 import com.team.frameai.model.FaceBoxNormalized
@@ -52,6 +54,8 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     var asked by rememberSaveable { mutableStateOf(false) }
+    var mode by rememberSaveable { mutableStateOf(CompositionMode.SUBJECT) }
+    var modeGeneration by remember { mutableIntStateOf(0) }
     var guided by rememberSaveable { mutableStateOf(true) }
     var area by remember { mutableStateOf<FaceBoxNormalized?>(null) }
     var trackingError by remember { mutableStateOf<String?>(null) }
@@ -59,6 +63,8 @@ fun CameraScreen(
     var capturing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var cloudOn by rememberSaveable { mutableStateOf(false) }
+    var aiFailed by remember { mutableStateOf(false) }
+    var aiReplyAt by remember { mutableLongStateOf(0L) }
     var aiReply by remember { mutableStateOf<LiveCoach?>(null) }
     var aiStatus by remember { mutableStateOf("Waiting for a scene suggestion…") }
     var resumed by remember { mutableStateOf(true) }
@@ -77,6 +83,8 @@ fun CameraScreen(
                 granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
             } else if (event == Lifecycle.Event.ON_PAUSE) {
                 resumed = false
+                aiReply = null
+                modeGeneration++
                 area = null
             }
         }
@@ -95,12 +103,16 @@ fun CameraScreen(
             }
         }
         controller.onFrameJpeg = { jpeg ->
+            val requestMode = mode
+            val requestGeneration = modeGeneration
             scope.launch {
                 try {
-                    val reply = client.coach(jpeg)
-                    if (cloudOn && resumed) {
+                    val reply = client.coach(jpeg, scene = requestMode == CompositionMode.SCENE)
+                    if (cloudOn && resumed && mode == requestMode && modeGeneration == requestGeneration) {
                         aiReply = reply
-                        aiStatus = if (reply == null) "AI unavailable. On-device framing still works." else ""
+                        aiFailed = reply == null
+                        aiReplyAt = SystemClock.elapsedRealtime()
+                        aiStatus = if (reply == null) "AI unavailable. You can still take a photo." else ""
                         if (reply?.suggestedLutId in listOf("warm_film", "cool_cinema")) {
                             controller.suggestedLutId = reply!!.suggestedLutId
                         }
@@ -121,12 +133,15 @@ fun CameraScreen(
         delay(1_500)
         area = null
     }
-    LaunchedEffect(aiReply) {
+    LaunchedEffect(aiReplyAt) {
         if (aiReply != null) { delay(8_000); aiReply = null; aiStatus = "Waiting for a fresh suggestion…" }
     }
-    val hint = trackingError?.let { FramingHint("Tracking unavailable", it, "!") } ?: framingHint(area)
+    val sceneAdvice = SceneComposition.suggest(aiReply, cloudOn, client.enabled, aiFailed)
+    val hint = if (mode == CompositionMode.SCENE)
+        FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
+        else trackingError?.let { FramingHint("Tracking unavailable", it, "!") } ?: framingHint(area)
     var settled by remember { mutableStateOf(false) }
-    LaunchedEffect(hint.aligned, guided) {
+    LaunchedEffect(hint.aligned, guided, mode) {
         settled = false
         if (hint.aligned && guided) { delay(600); settled = true }
     }
@@ -138,8 +153,19 @@ fun CameraScreen(
                 Text("FRAME  /  CAPTURE  /  COLOR", color = FrameMuted, fontSize = 9.sp, letterSpacing = 1.sp)
             }
             TextButton(onClick = { guided = !guided }) { Text(if (guided) "Guide on" else "Guide off") }
-            if (client.enabled) TextButton(onClick = { cloudOn = !cloudOn; aiReply = null }) {
+            if (client.enabled) TextButton(onClick = { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ }) {
                 Text(if (cloudOn) "AI on" else "AI off")
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CompositionMode.entries.forEach { choice ->
+                FilterChip(selected = mode == choice, onClick = {
+                    mode = choice
+                    area = null
+                    modeGeneration++
+                    aiFailed = false
+                    aiReply = null
+                }, label = { Text(if (choice == CompositionMode.SUBJECT) "Subject" else "Scene") })
             }
         }
         if (granted) {
@@ -156,31 +182,33 @@ fun CameraScreen(
                     },
                     update = { controller.previewView = it },
                 )
-                GuideOverlay(area, guided, settled)
+                if (mode == CompositionMode.SCENE) SceneOverlay(null, guided, settled)
+                else GuideOverlay(area, guided, settled)
                 Text(
                     when {
                         !guided -> "FREE FRAME"
+                        mode == CompositionMode.SCENE -> "SCENE · ACTION + SURROUNDINGS"
                         trackingError != null -> "TRACKING UNAVAILABLE"
                         area != null -> "SUBJECT TRACKED"
                         else -> "LOOKING FOR A SUBJECT"
                     },
-                    color = if (area != null) FrameReady else FramePaper, fontSize = 10.sp,
+                    color = if (mode == CompositionMode.SCENE) FramePaper else if (area != null) FrameReady else FramePaper, fontSize = 10.sp,
                     modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
                         .background(FrameInk.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(8.dp),
                 )
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp)) {
                 if (guided) {
-                    Text("01   FRAME YOUR SUBJECT", color = FrameMuted, fontSize = 10.sp, letterSpacing = 1.sp,
+                    Text(if (mode == CompositionMode.SCENE) "01   SUBJECT + SURROUNDINGS" else "01   FRAME YOUR SUBJECT", color = FrameMuted, fontSize = 10.sp, letterSpacing = 1.sp,
                         modifier = Modifier.padding(bottom = 8.dp))
-                    GuidanceCard(hint, settled)
+                    GuidanceCard(hint, settled, if (mode == CompositionMode.SCENE) "Scene framing ready" else "Position ready")
                 } else {
                     Text("Frame it your way", color = FramePaper, fontSize = 20.sp)
                     Text("The guide is off. You can take a photo at any time.", color = FrameMuted, fontSize = 12.sp)
                 }
                 if (cloudOn) {
                     Text("AI SUGGESTION · previews shared while on", color = FrameGold, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
-                    Text(aiReply?.message ?: aiStatus, color = FrameMuted, fontSize = 12.sp, maxLines = 2)
+                    if (mode == CompositionMode.SUBJECT) Text(aiReply?.message ?: aiStatus, color = FrameMuted, fontSize = 12.sp, maxLines = 2)
                 }
                 error?.let { Text(it, color = FrameGold, fontSize = 12.sp) }
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -198,7 +226,7 @@ fun CameraScreen(
                                 error = null
                                 val stamp = PhotoNames.timestamp()
                                 val file = ImageSaver.createOriginal(context, stamp)
-                                val captureArea = area.takeIf { guided && SystemClock.elapsedRealtime() - areaAt < 1_500 }
+                                val captureArea = area.takeIf { mode == CompositionMode.SUBJECT && guided && SystemClock.elapsedRealtime() - areaAt < 1_500 }
                                 val captureGuide = captureArea?.let {
                                     LiveGuide(
                                         if (settled) "READY" else "ALIGN_SUBJECT", hint.title,
@@ -235,14 +263,14 @@ fun CameraScreen(
 }
 
 @Composable
-private fun GuidanceCard(hint: FramingHint, settled: Boolean) {
+private fun GuidanceCard(hint: FramingHint, settled: Boolean, readyTitle: String = "Position ready") {
     Row(Modifier.fillMaxWidth().background(FrameSurface, RoundedCornerShape(16.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(if (hint.aligned && !settled) "◎" else hint.symbol,
             color = if (settled) FrameReady else FrameGold, fontSize = 32.sp,
             modifier = Modifier.width(44.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                if (settled) "Position ready" else if (hint.aligned) "Hold this position…" else hint.title,
+                if (settled) readyTitle else if (hint.aligned) "Hold this position…" else hint.title,
                 color = FramePaper, fontSize = 19.sp, fontWeight = FontWeight.SemiBold,
             )
             Text(hint.detail, color = FrameMuted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 4.dp))
