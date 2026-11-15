@@ -9,14 +9,12 @@ import androidx.camera.view.TransformExperimental
 import androidx.camera.view.transform.ImageProxyTransformFactory
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.vision.FaceBoxMath
-import androidx.camera.core.AspectRatio
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import com.team.frameai.guide.FrameRatio
 import com.team.frameai.guide.FrameRect
 import com.team.frameai.guide.GeometryMeasure
 import com.team.frameai.guide.SceneGeometry
@@ -111,6 +109,14 @@ class FrameCameraController(context: Context) {
         lifecycleController.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
     }
 
+    fun setActionMode(enabled: Boolean) {
+        lifecycleController.imageCaptureMode = if (enabled) {
+            ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+        } else {
+            ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
+        }
+    }
+
     fun takePicture(file: File, onSaved: () -> Unit, onError: (String) -> Unit) {
         try {
             val options = ImageCapture.OutputFileOptions.Builder(file).build()
@@ -127,6 +133,35 @@ class FrameCameraController(context: Context) {
         } catch (error: Exception) {
             onError(error.message ?: "Could not save the photo")
         }
+    }
+
+    /** Captures a short burst sequentially so CameraX never receives overlapping requests. */
+    fun takeBurst(
+        files: List<File>,
+        onSaved: (List<File>) -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        require(files.isNotEmpty()) { "Burst needs at least one output file" }
+        val saved = mutableListOf<File>()
+        fun capture(index: Int) {
+            if (index == files.size) {
+                onSaved(saved.toList())
+                return
+            }
+            val file = files[index]
+            takePicture(
+                file = file,
+                onSaved = {
+                    saved += file
+                    capture(index + 1)
+                },
+                onError = { message ->
+                    files.drop(index).forEach(File::delete)
+                    if (saved.isEmpty()) onError(message) else onSaved(saved.toList())
+                },
+            )
+        }
+        capture(0)
     }
 
     @androidx.annotation.OptIn(markerClass = [TransformExperimental::class])
@@ -232,23 +267,6 @@ class FrameCameraController(context: Context) {
     fun canApplyZoom(scale: Float): Boolean {
         val zoom = lifecycleController.zoomState.value ?: return false
         return ZoomLens.target(zoom.zoomRatio, scale, zoom.minZoomRatio, zoom.maxZoomRatio) != null
-    }
-
-    /** Matches the sensor crop to the frame. The preview view's own shape does the final crop, including 1:1. */
-    fun setFrameRatio(ratio: FrameRatio) {
-        val aspect = when (ratio) {
-            FrameRatio.FULL -> null
-            FrameRatio.SIXTEEN_NINE -> AspectRatio.RATIO_16_9
-            FrameRatio.FOUR_THREE, FrameRatio.SQUARE -> AspectRatio.RATIO_4_3
-        }
-        val output = aspect?.let { CameraController.OutputSize(it) }
-        try {
-            lifecycleController.previewTargetSize = output
-            lifecycleController.imageCaptureTargetSize = output
-            lifecycleController.imageAnalysisTargetSize = output
-        } catch (error: Exception) {
-            Log.w("FrameAI", "Camera ratio unavailable", error)
-        }
     }
 
     fun applyZoom(scale: Float) {

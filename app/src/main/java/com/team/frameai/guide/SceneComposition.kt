@@ -2,7 +2,7 @@ package com.team.frameai.guide
 
 import com.team.frameai.model.LiveCoach
 
-enum class CompositionMode { SUBJECT, SCENE }
+enum class CompositionMode { SUBJECT, SCENE, ACTION }
 data class SceneAdvice(val title: String, val detail: String, val ready: Boolean = false)
 
 /** Scene interpretation comes from the full image, never from a face or single object box. */

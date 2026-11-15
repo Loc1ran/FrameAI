@@ -87,7 +87,8 @@ fun CameraScreen(
     val scope = rememberCoroutineScope()
     val controller = remember { FrameCameraController(context.applicationContext) }
     val client = remember { LiveCoachClient(BuildConfig.SHOT_REVIEW_BASE_URL, BuildConfig.DEMO_TOKEN) }
-    controller.captureFrames = granted && cloudOn && resumed && client.enabled
+    val actionClient = remember { ActionBestShotClient(BuildConfig.SHOT_REVIEW_BASE_URL, BuildConfig.DEMO_TOKEN) }
+    controller.captureFrames = granted && cloudOn && resumed && client.enabled && mode != CompositionMode.ACTION
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it; asked = true }
 
     DisposableEffect(lifecycleOwner) {
@@ -128,7 +129,7 @@ fun CameraScreen(
         controller.onFrameJpeg = { jpeg ->
             val requestMode = mode
             val requestGeneration = modeGeneration
-            val requestInstruction = if (requestMode == CompositionMode.SCENE) "" else framingHint(live, area).title
+            val requestInstruction = if (requestMode == CompositionMode.SUBJECT) framingHint(live, area).title else ""
             scope.launch {
                 try {
                     val reply = client.coach(
@@ -171,12 +172,19 @@ fun CameraScreen(
             tapMark = null
         }
     }
-    LaunchedEffect(frameRatio) { controller.setFrameRatio(frameRatio) }
+    LaunchedEffect(mode) { controller.setActionMode(mode == CompositionMode.ACTION) }
     val sceneAdvice = SceneComposition.suggest(aiReply, cloudOn, client.enabled, aiFailed)
-    val hint = if (mode == CompositionMode.SCENE) {
-        FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
-    } else {
-        trackingError?.let { FramingHint("Tracking unavailable", it, "!") } ?: framingHint(live, area)
+    val hint = when (mode) {
+        CompositionMode.SCENE ->
+            FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
+        CompositionMode.ACTION -> FramingHint(
+            "Capture the movement",
+            if (cloudOn && actionClient.enabled) "One tap captures five frames. AI keeps the strongest action moment."
+            else "One tap captures five frames. The phone keeps the sharpest frame.",
+            "⚡",
+        )
+        CompositionMode.SUBJECT ->
+            trackingError?.let { FramingHint("Tracking unavailable", it, "!") } ?: framingHint(live, area)
     }
     var settled by remember { mutableStateOf(false) }
     LaunchedEffect(hint.aligned, guided, mode) {
@@ -185,7 +193,7 @@ fun CameraScreen(
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(FrameInk).safeDrawingPadding()) {
-        val deckHeight = maxHeight * 0.42f
+        val deckHeight = maxHeight * 0.36f
         LaunchedEffect(frameRatio) {
             area = null
             live = null
@@ -206,8 +214,11 @@ fun CameraScreen(
                     },
                     update = { controller.previewView = it },
                 )
-                if (mode == CompositionMode.SCENE) SceneOverlay(null, guided, settled)
-                else GuideOverlay(live, area, guided, geometry)
+                when (mode) {
+                    CompositionMode.SCENE -> SceneOverlay(null, guided, settled)
+                    CompositionMode.SUBJECT -> GuideOverlay(live, area, guided, geometry)
+                    CompositionMode.ACTION -> Unit
+                }
                 if (mode == CompositionMode.SUBJECT) {
                     Box(
                         Modifier.fillMaxSize().pointerInput(mode) {
@@ -229,12 +240,13 @@ fun CameraScreen(
                     when {
                         !guided -> "FREE FRAME"
                         mode == CompositionMode.SCENE -> "SCENE · ACTION + SURROUNDINGS"
+                        mode == CompositionMode.ACTION -> "ACTION · FIVE-FRAME BURST"
                         trackingError != null -> "TRACKING UNAVAILABLE"
                         picked -> "YOUR SUBJECT"
                         area != null -> "SUBJECT TRACKED"
                         else -> "LOOKING FOR A SUBJECT"
                     },
-                    color = if (mode == CompositionMode.SCENE) FramePaper else if (area != null) FrameReady else FramePaper, fontSize = 10.sp,
+                    color = if (mode != CompositionMode.SUBJECT) FramePaper else if (area != null) FrameReady else FramePaper, fontSize = 10.sp,
                     modifier = Modifier
                         .background(FrameInk.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(8.dp),
                 )
@@ -253,9 +265,39 @@ fun CameraScreen(
                 onZoomOut = { controller.applyZoom(0.8f) },
                 onZoomIn = { controller.applyZoom(1.25f) },
                 onCapture = {
-                        capturing = true
-                        error = null
-                        val stamp = PhotoNames.timestamp()
+                    capturing = true
+                    error = null
+                    val stamp = PhotoNames.timestamp()
+                    if (mode == CompositionMode.ACTION) {
+                        val files = List(ACTION_BURST_SIZE) { index ->
+                            ImageSaver.createOriginal(context, "${stamp}_burst_${index + 1}")
+                        }
+                        controller.takeBurst(
+                            files = files,
+                            onSaved = { saved ->
+                                scope.launch {
+                                    val selected = try {
+                                        val aiPick = if (cloudOn) actionClient.choose(saved) else null
+                                        aiPick?.takeIf { it.source == "gemini" }
+                                            ?.index?.takeIf { it in saved.indices }
+                                            ?: actionClient.localBest(saved)
+                                    } catch (_: Exception) {
+                                        saved.size / 2
+                                    }.coerceIn(saved.indices)
+                                    val chosen = saved[selected]
+                                    saved.filterIndexed { index, _ -> index != selected }
+                                        .forEach(File::delete)
+                                    capturing = false
+                                    onCaptured(chosen, stamp, controller.suggestedLutId, null)
+                                }
+                            },
+                            onError = { message ->
+                                capturing = false
+                                files.forEach(File::delete)
+                                error = message
+                            },
+                        )
+                    } else {
                         val file = ImageSaver.createOriginal(context, stamp)
                         val fresh = mode == CompositionMode.SUBJECT && guided &&
                             area != null && SystemClock.elapsedRealtime() - areaAt < 1_500
@@ -264,6 +306,7 @@ fun CameraScreen(
                             onSaved = { capturing = false; onCaptured(file, stamp, controller.suggestedLutId, captureGuide) },
                             onError = { capturing = false; file.delete(); error = it },
                         )
+                    }
                 },
                 modifier = modifier.testTag("cameraControls"),
             )
@@ -327,15 +370,15 @@ private fun CameraToolbar(
         Box {
             TextButton(onClick = { menu = "mode" }, modifier = Modifier.width(80.dp).fillMaxHeight()) {
                 CameraLabel(orientationDegrees, Modifier.fillMaxSize()) {
-                    Text(if (mode == CompositionMode.SUBJECT) "Subject" else "Scene", fontSize = 13.sp)
+                    Text(modeLabel(mode), fontSize = 13.sp)
                 }
             }
             DropdownMenu(expanded = menu == "mode", onDismissRequest = { menu = null }) {
                 CameraLabel(orientationDegrees, Modifier.width(if (orientationDegrees % 180 == 0) 240.dp else 208.dp)) { Column(Modifier.width(240.dp)) {
                 CompositionMode.entries.forEach { choice ->
                     DropdownMenuItem(text = { Column {
-                        Text(if (choice == CompositionMode.SUBJECT) "Subject" else "Scene")
-                        Text(if (choice == CompositionMode.SUBJECT) "Follow a person or object" else "Consider the surroundings", fontSize = 12.sp)
+                        Text(modeLabel(choice))
+                        Text(modeDescription(choice), fontSize = 12.sp)
                     } }, onClick = { onMode(choice); menu = null })
                 }
                 } }
@@ -429,21 +472,35 @@ private fun CaptureDeck(
                 )
             }
             GuidanceCard(hint)
+            if (mode == CompositionMode.ACTION && capturing) {
+                Text("Capturing five frames and choosing the best moment…",
+                    color = FrameGold, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
         } else {
             Text("Frame it your way", color = FramePaper, fontSize = 20.sp)
             Text("The guide is off. You can take a photo at any time.", color = FrameMuted, fontSize = 12.sp)
         }
         if (cloudOn) {
-            Text("AI SUGGESTION · same move as the guide", color = FrameGold, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
+            Text(
+                if (mode == CompositionMode.ACTION) "AI BEST SHOT · compares the burst"
+                else "AI SUGGESTION · same move as the guide",
+                color = FrameGold,
+                fontSize = 9.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
             if (mode == CompositionMode.SUBJECT) {
                 Text(
                     matchingSuggestion(hint.title, aiReply?.message, aiForInstruction),
                     color = FrameMuted,
-                    fontSize = 12.sp,
-                    maxLines = 3,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 2,
                 )
             }
-            if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 12.sp)
+            if (mode == CompositionMode.ACTION) {
+                Text("After capture, AI checks timing, sharpness, clipping, and composition.",
+                    color = FrameMuted, fontSize = 11.sp, maxLines = 2)
+            } else if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 11.sp, maxLines = 2)
         }
         error?.let { Text(it, color = FrameGold, fontSize = 12.sp) }
         }
@@ -466,18 +523,32 @@ private fun CaptureDeck(
     }
 }
 
+private fun modeLabel(mode: CompositionMode): String = when (mode) {
+    CompositionMode.SUBJECT -> "Subject"
+    CompositionMode.SCENE -> "Scene"
+    CompositionMode.ACTION -> "Action"
+}
+
+private fun modeDescription(mode: CompositionMode): String = when (mode) {
+    CompositionMode.SUBJECT -> "Follow a person or object"
+    CompositionMode.SCENE -> "Consider the surroundings"
+    CompositionMode.ACTION -> "Burst and keep the best moment"
+}
+
+private const val ACTION_BURST_SIZE = 5
+
 @Composable
 private fun GuidanceCard(hint: FramingHint) {
-    Row(Modifier.fillMaxWidth().background(FrameSurface, RoundedCornerShape(16.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(FrameSurface, RoundedCornerShape(12.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(hint.symbol,
-            color = if (hint.aligned) FrameReady else FrameGold, fontSize = 32.sp,
-            modifier = Modifier.width(44.dp))
+            color = if (hint.aligned) FrameReady else FrameGold, fontSize = 24.sp,
+            modifier = Modifier.width(32.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 hint.title,
-                color = FramePaper, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                color = FramePaper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp,
             )
-            Text(hint.detail, color = FrameMuted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(hint.detail, color = FrameMuted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
