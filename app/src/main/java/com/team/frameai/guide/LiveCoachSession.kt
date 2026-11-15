@@ -1,9 +1,9 @@
 package com.team.frameai.guide
 
+import com.team.frameai.lut.LutPack
 import com.team.frameai.model.AdviceSource
 import com.team.frameai.model.LiveCoach
 import com.team.frameai.model.LiveGuide
-import com.team.frameai.model.LutIds
 
 data class CoachMemory(
     val reply: LiveCoach? = null,
@@ -43,7 +43,7 @@ object LiveCoachSession {
                 lutId = null,
             )
         }
-        val lut = reply.suggestedLutId.takeIf { it == LutIds.WARM_FILM || it == LutIds.COOL_CINEMA }
+        val lut = reply.suggestedLutId.takeIf { it in LutPack.ids }
         return ShownCoach(
             guide = reply.toPicture(offline),
             zoom = reply.zoom,

@@ -27,16 +27,16 @@ Follow `docs/three-developer-gemini-coach-plan.md`. Do not bring back the fixed 
 
 - A person can sit on either third. Size and clipped edges are judged before placement.
 - With no person, a detected horizon uses the nearest grid line. Without a horizon, the frame is ready even when one side is brighter; the overlay shows the green check. Brightness still influences placement when a face is present.
-- Scene warmth selects `warm_film` or `cool_cinema` through `SceneRead.lookId`, which the camera passes to the capture/review flow.
+- Scene warmth can suggest `warm_film` or `cool_cinema` through `SceneRead.lookId`. The review screen can apply every bundled LUT, and Gemini picks one for the current photo.
 - The preview draws a dashed goal, a solid current frame, and an arrow. It does not print `message`.
 - `GuideSmoother` is not wired in `MainActivity`. Do not add "move left" or "move right" to any text that still exists in JSON.
 
 ### LUT
 
-`LutPack.looks` is only Warm Film and Cool Cinema. The other `.cube` files stay in `app/src/main/assets/luts/` and are not loaded or offered. Several are camera-log conversions and must not be applied to a normal phone JPEG.
+`LutPack.looks` includes every bundled `.cube` except `identity_4`. The review screen applies one at a time. Gemini is asked to choose a phone-photo look. Camera-log conversions stay in the list so they can be tried, and they are a poor match for a phone JPEG.
 
-- `warm_film` is the downloaded `cinematic_04.cube`
-- `cool_cinema` is the downloaded `cinematic_08.cube`
+- `warm_film` is still the downloaded `cinematic_04` grade, stored as `warm_film.cube`
+- `cool_cinema` is still the downloaded `cinematic_08` grade, stored as `cool_cinema.cube`
 - `identity_4.cube` is for the identity check and is not a user preset
 - Review strength is `LutPack.REVIEW_INTENSITY` (`0.85`). The repository default of `0.7` is not what the screen uses.
 

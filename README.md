@@ -23,12 +23,9 @@ Package: `com.team.frameai` · minSdk 26
 | `server/` | Developer C, on this PC |
 | `docs/three-developer-gemini-coach-plan.md` | Current plan |
 
-## Frozen LUT IDs
+## LUT catalog
 
-- `warm_film`
-- `cool_cinema`
-
-The review screen offers only those two looks. `warm_film` is the packaged `cinematic_04` file and `cool_cinema` is `cinematic_08`, applied at strength 0.85. Other files in the asset folder are not selectable. Shot review may suggest only these two ids, or `none`.
+Every `.cube` in `app/src/main/assets/luts` except `identity_4` can be applied on the review screen, one look at a time. Save writes the look that is on screen. Gemini chooses one id for the current photo. Phone-photo looks are preferred. Camera-log conversions stay in the list, and `none` leaves the color unchanged. Review strength is 0.85.
 
 ## Quick start (Android Studio)
 

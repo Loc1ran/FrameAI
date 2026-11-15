@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.team.frameai.BuildConfig
 import com.team.frameai.camera.ImageSaver
 import com.team.frameai.camera.PhotoGrader
+import com.team.frameai.lut.LutPack
 import com.team.frameai.model.LiveGuide
 import com.team.frameai.model.ShotReview
 import kotlinx.coroutines.CancellationException
@@ -29,7 +30,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private val Looks = listOf("warm_film" to "Warm Film", "cool_cinema" to "Cool Cinema")
 private data class GradedPhoto(val lutId: String, val bitmap: Bitmap)
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -63,20 +63,42 @@ fun ReviewScreen(
     var coaching by remember(originalPath) { mutableStateOf<ShotReview?>(null) }
     var savedEdit by remember(originalPath) { mutableStateOf<File?>(null) }
     var openFailed by remember(originalPath) { mutableStateOf(false) }
+    var bestMatch by remember(originalPath) { mutableStateOf(suggestedLut.takeIf { it in LutPack.ids }) }
+    var matchReason by remember(originalPath) { mutableStateOf<String?>(null) }
 
     BackHandler { if (!busy) onRetake() }
     LaunchedEffect(originalPath) {
-        try {
-            original = withContext(Dispatchers.Default) {
+        val decoded = try {
+            withContext(Dispatchers.Default) {
                 ImageSaver.decodeOriented(originalPath, maxEdge = 2048)
             }
-            openFailed = original == null
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (_: Exception) {
-            openFailed = true
+            null
         }
-        if (openFailed) status = "Could not open this photo. Return to the camera to try again."
+        original = decoded
+        openFailed = decoded == null
+        if (openFailed) {
+            status = "Could not open this photo. Return to the camera to try again."
+            return@LaunchedEffect
+        }
+        if (!client.cloudConfigured || decoded == null) return@LaunchedEffect
+        try {
+            status = "Choosing a look…"
+            val jpeg = withContext(Dispatchers.Default) { ImageSaver.jpegForReview(decoded) }
+            val review = client.review(jpeg, cloudEnabled = true)
+            if (review.source == "gemini" && review.suggestedLutId in LutPack.ids) {
+                bestMatch = review.suggestedLutId
+                matchReason = review.lutReason
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            // The full list stays available when the choice does not arrive.
+        } finally {
+            if (status == "Choosing a look…") status = null
+        }
     }
 
     suspend fun materializeEdit(photo: GradedPhoto): File {
@@ -93,6 +115,53 @@ fun ReviewScreen(
     val visibleEdit = edited.takeIf { showEdited }
     val shown = visibleEdit?.bitmap ?: original
     val outputLabel = if (visibleEdit == null) "original" else "edit"
+
+    @Composable
+    fun LookChoices(title: String, looks: List<LutPack.Look>) {
+        if (looks.isEmpty()) return
+        Text(title, color = FramePaper, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+        val ordered = looks.sortedWith(compareBy<LutPack.Look> { if (it.id == bestMatch) 0 else 1 }.thenBy { it.name })
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ordered.forEach { look ->
+                FilterChip(
+                    selected = visibleEdit?.lutId == look.id,
+                    enabled = original != null && !busy,
+                    onClick = {
+                        val id = look.id
+                        val label = look.name
+                        if (edited?.lutId == id) {
+                            showEdited = true
+                            status = null
+                        } else {
+                            val source = original ?: return@FilterChip
+                            busy = true
+                            edited = null
+                            showEdited = false
+                            savedEdit = null
+                            status = "Applying $label…"
+                            scope.launch {
+                                try {
+                                    val bitmap = withContext(Dispatchers.Default) {
+                                        photoGrader.apply(source, id, LutPack.REVIEW_INTENSITY)
+                                    }
+                                    edited = GradedPhoto(id, bitmap)
+                                    showEdited = true
+                                    status = null
+                                } catch (cancel: CancellationException) {
+                                    throw cancel
+                                } catch (_: Exception) {
+                                    status = "Could not apply $label. Your original is unchanged. Try again."
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        }
+                    },
+                    label = { Text(look.name) },
+                )
+            }
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().background(FrameInk)
@@ -119,9 +188,19 @@ fun ReviewScreen(
         }
 
         Text("02   CHOOSE YOUR COLOR", color = FrameGold, fontSize = 11.sp)
-        Text("Tap a look to see it. Your original stays safe.", color = FrameMuted, fontSize = 12.sp)
-        if (suggestedLut in Looks.map { it.first }) {
-            Text("Suggested: ${lutLabel(suggestedLut)} · try both and choose", color = FrameMuted, fontSize = 12.sp)
+        Text(
+            "Apply one look at a time. Save keeps the photo on screen, and you can try another after that.",
+            color = FrameMuted,
+            fontSize = 12.sp,
+        )
+        bestMatch?.let { id ->
+            val lead = if (matchReason != null) "Best match" else "From this frame"
+            Text(
+                "$lead: ${lutLabel(id)}" + (matchReason?.let { reason -> ". $reason" } ?: ""),
+                color = FrameGold,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
@@ -130,43 +209,9 @@ fun ReviewScreen(
                 onClick = { showEdited = false; status = null },
                 label = { Text("Original") },
             )
-            Looks.forEach { (id, label) ->
-                FilterChip(
-                    selected = visibleEdit?.lutId == id,
-                    enabled = original != null && !busy,
-                    onClick = {
-                        if (edited?.lutId == id) {
-                            showEdited = true
-                            status = null
-                        } else {
-                            val source = original ?: return@FilterChip
-                            busy = true
-                            edited = null
-                            showEdited = false
-                            savedEdit = null
-                            status = "Applying $label…"
-                            scope.launch {
-                                try {
-                                    val bitmap = withContext(Dispatchers.Default) {
-                                        photoGrader.apply(source, id, 0.85f)
-                                    }
-                                    edited = GradedPhoto(id, bitmap)
-                                    showEdited = true
-                                    status = null
-                                } catch (cancel: CancellationException) {
-                                    throw cancel
-                                } catch (_: Exception) {
-                                    status = "Could not apply $label. Your original is unchanged. Try again."
-                                } finally {
-                                    busy = false
-                                }
-                            }
-                        }
-                    },
-                    label = { Text(label) },
-                )
-            }
         }
+        LookChoices("Film and cinema", LutPack.looks.filter { it.phoneJpeg })
+        LookChoices("Camera conversions", LutPack.looks.filter { !it.phoneJpeg })
         if (busy) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
         }

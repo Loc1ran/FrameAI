@@ -142,15 +142,18 @@ class CubeLutTest {
     }
 
     @Test
-    fun catalogOffersOnlyTheTwoPhoneLooks() {
+    fun catalogIncludesEveryDownloadedCubeExceptIdentity() {
         val dir = frameFile("app/src/main/assets/luts")
         val cubes = dir.listFiles { file -> file.extension.equals("cube", ignoreCase = true) }!!
+        val selectable = cubes.map { it.nameWithoutExtension }.filter { it != "identity_4" }.toSet()
         assertTrue(cubes.size > 100, "the downloaded library stays on disk")
-        assertEquals(listOf(LutIds.WARM_FILM, LutIds.COOL_CINEMA), LutPack.looks.map { it.id })
-        assertEquals(setOf(LutIds.WARM_FILM, LutIds.COOL_CINEMA), LutPack.ids)
-        assertEquals("cinematic_04.cube", LutPack.looks[0].sourceAsset)
-        assertEquals("cinematic_08.cube", LutPack.looks[1].sourceAsset)
-        assertFalse(LutPack.ids.contains("alexa_logc_to_rec709"))
+        assertEquals(selectable, LutPack.ids)
+        assertFalse(LutPack.ids.contains("identity_4"))
+        val warm = LutPack.looks.first { it.id == LutIds.WARM_FILM }
+        assertEquals("Warm Film", warm.name)
+        assertEquals("warm_film.cube", warm.sourceAsset)
+        assertTrue(warm.phoneJpeg)
+        assertFalse(LutPack.looks.first { it.id == "alexa_logc_to_rec709" }.phoneJpeg)
         for (file in cubes) {
             val lut = parseCube(file.readText())
             assertTrue(lut.size in 2..64, file.name)

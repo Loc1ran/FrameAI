@@ -19,9 +19,17 @@
   "properties": {
     "sceneType": {
       "type": "string",
-      "enum": ["portrait", "landscape", "other"]
+      "enum": [
+        "portrait",
+        "landscape",
+        "other"
+      ]
     },
-    "subject": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
     "referenceId": {
       "type": "string",
       "enum": [
@@ -34,19 +42,181 @@
         "none"
       ]
     },
-    "message": { "type": "string", "minLength": 1, "maxLength": 120 },
-    "zoom": { "type": "string", "enum": ["in", "out", "hold"] },
-    "targetZoomRatio": { "type": "number", "minimum": 1, "maximum": 8 },
-    "targetX": { "type": "number", "minimum": 0, "maximum": 1 },
-    "targetY": { "type": "number", "minimum": 0, "maximum": 1 },
-    "subjectX": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-    "subjectY": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-    "isReady": { "type": "boolean" },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "zoom": {
+      "type": "string",
+      "enum": [
+        "in",
+        "out",
+        "hold"
+      ]
+    },
+    "targetZoomRatio": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "targetX": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "targetY": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "subjectX": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "subjectY": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "isReady": {
+      "type": "boolean"
+    },
     "suggestedLutId": {
       "type": "string",
-      "enum": ["warm_film", "cool_cinema", "none"]
+      "enum": [
+        "cool_cinema",
+        "warm_film",
+        "5245exr_color_negative",
+        "5278_vision_320t",
+        "5278_vision_320t_sat",
+        "5279_7279_vision_500t",
+        "5280_vision_320t",
+        "cinematic_01",
+        "cinematic_02",
+        "cinematic_03",
+        "cinematic_04",
+        "cinematic_05",
+        "cinematic_06",
+        "cinematic_07",
+        "cinematic_08",
+        "cinematic_09",
+        "cinematic_10",
+        "eastman_5247_100t_process_ecn_2",
+        "eastman_color_negative_film_5250",
+        "eastman_color_negative_film_5251_50t",
+        "eastman_color_negative_film_5251_50t_hc",
+        "eastman_color_negative_film_5251_50t_lg",
+        "eastman_color_negative_film_5252_50t_hc",
+        "eastman_color_negative_film_5265",
+        "eastman_ektachrome_warm_7239",
+        "eastman_kodak_7355_pink_violet",
+        "eastman_kodak_8100",
+        "eastman_kodak_cr8200",
+        "eastman_neg_5247_warm",
+        "eastman_neg_5425yt",
+        "eastmancolor_negative_5293",
+        "eastmancolor_negative_5295",
+        "eastmancolor_negative_7291",
+        "ektachrome_7252_25t",
+        "ektachrome_color_reversal_7252",
+        "ektachrome_color_reversal_film_5285t",
+        "eterna_250d_8563",
+        "eterna_250d_8565",
+        "eterna_negative_250t",
+        "exr_100t_5545",
+        "exr_500t_7227",
+        "exr_500t_7287",
+        "exr_500t_7290",
+        "exr_500t_7298",
+        "exr_50d_5245",
+        "exr_color_negative_5245",
+        "exr_color_negative_5454",
+        "filmtec_101_blue",
+        "filmtec_102_by",
+        "fugi_super_f200",
+        "fuji_ex450",
+        "fuji_ext650",
+        "fuji_int450",
+        "fuji_superf_8110_lg",
+        "fuji_superf_8112",
+        "fuji_superf_8510",
+        "fuji_superf_8520",
+        "fuji_superf_8530",
+        "g_outdoors1",
+        "g_outdoors10",
+        "g_outdoors11",
+        "g_outdoors12",
+        "g_outdoors13",
+        "g_outdoors14",
+        "g_outdoors15",
+        "g_outdoors16",
+        "g_outdoors17",
+        "g_outdoors18",
+        "g_outdoors19",
+        "g_outdoors2",
+        "g_outdoors20",
+        "g_outdoors21",
+        "g_outdoors22",
+        "g_outdoors23",
+        "g_outdoors24",
+        "g_outdoors25",
+        "g_outdoors26",
+        "g_outdoors27",
+        "g_outdoors28",
+        "g_outdoors29",
+        "g_outdoors3",
+        "g_outdoors30",
+        "g_outdoors31",
+        "g_outdoors4",
+        "g_outdoors5",
+        "g_outdoors6",
+        "g_outdoors7",
+        "g_outdoors8",
+        "g_outdoors9",
+        "kodachrome_color_reversal_film_5269",
+        "kodachrome_color_reversal_film_t550",
+        "kodak_4_x_reversal_film_7277",
+        "kodak_4_x_reversal_film_7277_2",
+        "kodak_clean",
+        "kodak_ex250ng",
+        "kodak_filmsat_t101",
+        "vision2_color_negative_7255",
+        "alexa_logc_to_rec709",
+        "blackmagic_4k_film_to_rec709",
+        "blackmagic_4k_film_to_rec709_v2",
+        "blackmagic_film_to_rec709",
+        "blackmagic_film_to_rec709_v2",
+        "bm_ursamini4_6k_film",
+        "bm_ursamini4_6k_prores",
+        "bmcc2_5k",
+        "bmcc4k",
+        "bmccpocket",
+        "canon_log_cingamut_rec709_wdr",
+        "canon_log_rec709_wdr",
+        "canon_log2_cingamut_rec709_wdr",
+        "canon_log2_rec709_wdr",
+        "cinestyle_s_curve",
+        "dji_inspire_log_to_rec709",
+        "gh4_cinelike_d_to_rec709",
+        "none"
+      ]
     },
-    "source": { "type": "string", "enum": ["gemini", "offline_rules", "demo_mock"] }
+    "source": {
+      "type": "string",
+      "enum": [
+        "gemini",
+        "offline_rules",
+        "demo_mock"
+      ]
+    }
   },
   "additionalProperties": false
 }
