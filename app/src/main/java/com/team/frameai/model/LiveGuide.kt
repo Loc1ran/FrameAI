@@ -18,4 +18,10 @@ data class LiveGuide(
     /** `in`, `out`, or `hold`. The lens does not move until the user applies zoom. */
     val zoom: String? = null,
     val targetZoomRatio: Double? = null,
+    /** Why the current instruction matters. Null keeps the local detail line. */
+    val detail: String? = null,
+    /** A viewpoint change has no reliable dashed frame, so the goal box stays hidden. */
+    val hideGoal: Boolean = false,
+    /** Card glyph for a move that is not a pan or tilt. Null keeps the arrow glyph. */
+    val cueSymbol: String? = null,
 )

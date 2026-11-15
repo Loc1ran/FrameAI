@@ -46,7 +46,7 @@ fun GuideOverlay(
                 drawLine(FrameLine, Offset(0f, y), Offset(w, y), 1.dp.toPx())
             }
             if (guide == null) return@Canvas
-            if (LightingAdviceEngine.isCue(guide.message)) {
+            if (guide.hideGoal || LightingAdviceEngine.isCue(guide.message)) {
                 val picture = GuidePicture.of(guide, area)
                 if (area != null && area.width > 0.02f && area.height > 0.02f) {
                     drawSolid(picture.current, FramePaper)

@@ -20,18 +20,23 @@ class LiveCoachClient(
 ) {
     val enabled: Boolean get() = baseUrl.isNotBlank() && demoToken.isNotBlank()
 
-    suspend fun coach(jpeg: ByteArray, scene: Boolean = false, instruction: String = ""): LiveCoach? {
+    suspend fun coach(
+        jpeg: ByteArray,
+        scene: Boolean = false,
+        instruction: String = "",
+        style: String = "auto",
+    ): LiveCoach? {
         if (!enabled) return null
         return try {
             withTimeout(12_000) {
-                withContext(Dispatchers.IO) { post(jpeg, scene, instruction) }
+                withContext(Dispatchers.IO) { post(jpeg, scene, instruction, style) }
             }
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun post(jpeg: ByteArray, scene: Boolean, instruction: String): LiveCoach? {
+    private fun post(jpeg: ByteArray, scene: Boolean, instruction: String, style: String): LiveCoach? {
         val composition = if (scene) "scene" else "subject"
         val endpoint = baseUrl.trimEnd('/') + "/v1/live-coach?composition=$composition"
         val boundary = "frameai-" + UUID.randomUUID()
@@ -45,7 +50,7 @@ class LiveCoachClient(
             setRequestProperty("X-Demo-Token", demoToken)
         }
         try {
-            connection.outputStream.use { it.write(multipart(jpeg, boundary, instruction)) }
+            connection.outputStream.use { it.write(multipart(jpeg, boundary, instruction, style)) }
             if (connection.responseCode != 200) return null
             if (scene && connection.getHeaderField("X-FrameAI-Composition") != "scene") return null
             val body = connection.inputStream.bufferedReader().use { it.readText() }
@@ -56,7 +61,7 @@ class LiveCoachClient(
         }
     }
 
-    private fun multipart(jpeg: ByteArray, boundary: String, instruction: String): ByteArray {
+    private fun multipart(jpeg: ByteArray, boundary: String, instruction: String, style: String): ByteArray {
         val out = ByteArrayOutputStream()
         val header = buildString {
             append("--").append(boundary).append("\r\n")
@@ -65,16 +70,20 @@ class LiveCoachClient(
         }
         out.write(header.toByteArray(Charsets.UTF_8))
         out.write(jpeg)
+        val chosen = style.replace("\r", " ").replace("\n", " ").trim().take(24).ifEmpty { "auto" }
+        writeField(out, boundary, "style", chosen)
         val move = instruction.replace("\r", " ").replace("\n", " ").trim().take(120)
-        if (move.isNotEmpty()) {
-            val field = buildString {
-                append("\r\n--").append(boundary).append("\r\n")
-                append("Content-Disposition: form-data; name=\"instruction\"\r\n\r\n")
-                append(move)
-            }
-            out.write(field.toByteArray(Charsets.UTF_8))
-        }
+        if (move.isNotEmpty()) writeField(out, boundary, "instruction", move)
         out.write("\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8))
         return out.toByteArray()
+    }
+
+    private fun writeField(out: ByteArrayOutputStream, boundary: String, name: String, value: String) {
+        val field = buildString {
+            append("\r\n--").append(boundary).append("\r\n")
+            append("Content-Disposition: form-data; name=\"").append(name).append("\"\r\n\r\n")
+            append(value)
+        }
+        out.write(field.toByteArray(Charsets.UTF_8))
     }
 }

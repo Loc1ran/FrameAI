@@ -23,8 +23,12 @@ class GuideEngine(
         preferCentered: Boolean = false,
         lockedStrategy: CompositionStrategy? = null,
         lockedTargetX: Float? = null,
+        lockedTargetY: Float? = null,
+        lockedHorizonY: Float? = null,
     ): LiveGuide {
-        return advise(faceBox, steady, scene, preferCentered, lockedStrategy, lockedTargetX).guide
+        return advise(
+            faceBox, steady, scene, preferCentered, lockedStrategy, lockedTargetX, lockedTargetY, lockedHorizonY,
+        ).guide
     }
 
     fun advise(
@@ -34,9 +38,11 @@ class GuideEngine(
         preferCentered: Boolean = false,
         lockedStrategy: CompositionStrategy? = null,
         lockedTargetX: Float? = null,
+        lockedTargetY: Float? = null,
+        lockedHorizonY: Float? = null,
     ): Framing {
         val base = if (faceBox == null) {
-            noFace(scene)
+            noFace(scene, lockedHorizonY)
         } else {
             val natural = choose(faceBox, scene, preferCentered)
             val strategy = when {
@@ -46,7 +52,10 @@ class GuideEngine(
                 else -> natural.strategy
             }
             val confidence = if (strategy == natural.strategy) natural.confidence else (natural.confidence - 0.05f).coerceAtLeast(0.4f)
-            portrait(faceBox, scene, strategy, confidence, natural.urgent && strategy == natural.strategy, lockedTargetX)
+            portrait(
+                faceBox, scene, strategy, confidence,
+                natural.urgent && strategy == natural.strategy, lockedTargetX, lockedTargetY,
+            )
         }
         if (base.strategy == CompositionStrategy.BREATHING_ROOM) return base
         if (lockedStrategy != null && lockedStrategy != CompositionStrategy.GEOMETRY) return base
@@ -66,10 +75,10 @@ class GuideEngine(
         return Framing(guide, CompositionStrategy.GEOMETRY, advice.confidence, urgent = false)
     }
 
-    private fun noFace(scene: SceneRead?): Framing {
+    private fun noFace(scene: SceneRead?, lockedHorizonY: Float?): Framing {
         if (scene == null) return framing(emptyFrame(), CompositionStrategy.NO_SUBJECT, 0.9f, urgent = true)
         val horizon = scene.horizonY
-        if (scene.hasHorizon() && horizon != null) return horizonFrame(scene, horizon)
+        if (scene.hasHorizon() && horizon != null) return horizonFrame(scene, horizon, lockedHorizonY)
         return framing(readyScene(scene, OPEN_READY), CompositionStrategy.OPEN_SCENE, 0.8f, urgent = true)
     }
 
@@ -86,8 +95,8 @@ class GuideEngine(
         )
     }
 
-    private fun horizonFrame(scene: SceneRead, horizon: Float): Framing {
-        val targetY = horizonTarget(scene, horizon)
+    private fun horizonFrame(scene: SceneRead, horizon: Float, lockedHorizonY: Float?): Framing {
+        val targetY = (lockedHorizonY ?: horizonTarget(scene, horizon)).coerceIn(0.2f, 0.8f)
         val ready = abs(horizon - targetY) <= toleranceY
         val message = when {
             ready && scene.warmth < -0.08f -> READY_COOL
@@ -168,6 +177,7 @@ class GuideEngine(
         confidence: Float,
         urgent: Boolean,
         lockedTargetX: Float?,
+        lockedTargetY: Float?,
     ): Framing {
         val computed = targetFor(strategy, face, scene)
         val targetX = when {
@@ -175,7 +185,11 @@ class GuideEngine(
             strategy == CompositionStrategy.BREATHING_ROOM -> computed.first
             else -> lockedTargetX.coerceIn(0.28f, 0.72f)
         }
-        val targetY = computed.second
+        val targetY = when {
+            lockedTargetY == null -> computed.second
+            strategy == CompositionStrategy.BREATHING_ROOM -> computed.second
+            else -> lockedTargetY.coerceIn(0.24f, 0.76f)
+        }
         val placed = abs(face.anchorX - targetX) <= toleranceX && abs(face.anchorY - targetY) <= toleranceY
         val aligned = strategy != CompositionStrategy.BREATHING_ROOM && placed
         val zoom = zoomFor(strategy, face)

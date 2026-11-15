@@ -357,6 +357,12 @@ internal fun reviewLookIds(aiIds: List<String>, suggestedId: String?, keepId: St
 }
 
 @Composable
+private fun CritiqueLine(label: String, body: String) {
+    Text(label, color = FrameGold, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+    Text(body, color = FramePaper, fontSize = 14.sp)
+}
+
+@Composable
 private fun CoachingCard(review: ShotReview) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
@@ -364,12 +370,12 @@ private fun CoachingCard(review: ShotReview) {
             .padding(14.dp),
     ) {
         Text(sourceLabel(review.source), color = FrameGold, fontSize = 12.sp)
-        Text(review.summary, color = FramePaper, modifier = Modifier.padding(top = 6.dp))
-        Text(review.improvement, color = FramePaper, modifier = Modifier.padding(top = 8.dp))
+        CritiqueLine("What worked", review.summary)
+        CritiqueLine("What could improve", review.improvement)
+        CritiqueLine("Try next", review.principle)
         Text(
-            "${review.principle} · ${lutLabel(review.suggestedLutId)}",
+            "${lutLabel(review.suggestedLutId)} · ${review.lutReason}",
             color = FrameMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp),
         )
-        Text(review.lutReason, color = FrameMuted, fontSize = 13.sp)
     }
 }

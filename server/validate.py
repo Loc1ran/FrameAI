@@ -54,6 +54,63 @@ ALLOWED_COACH_KEYS = {
     "isReady",
     "suggestedLutId",
     "source",
+    "photographyStyle",
+    "compositionPreset",
+    "primaryIssue",
+    "actionType",
+    "actionReason",
+    "confidence",
+}
+
+PHOTOGRAPHY_STYLES = {"auto", "cinematic", "portrait", "street", "landscape"}
+COMPOSITION_PRESETS = {
+    "none",
+    "centered",
+    "negative_space_left",
+    "negative_space_right",
+    "low_horizon",
+    "high_horizon",
+    "leading_space",
+    "environmental",
+    "street_layer",
+}
+PRIMARY_ISSUES = {
+    "none",
+    "subject_underexposed",
+    "backlit",
+    "harsh_light",
+    "distracting_background",
+    "clipped_highlights",
+    "tilted_horizon",
+    "weak_separation",
+    "empty_space",
+    "already_strong",
+}
+DIRECTOR_ACTIONS = {
+    "hold",
+    "pan_left",
+    "pan_right",
+    "tilt_up",
+    "tilt_down",
+    "straighten",
+    "step_left",
+    "step_right",
+    "move_closer",
+    "move_farther",
+    "lower_camera",
+    "raise_camera",
+    "change_lighting",
+    "expose_for_subject",
+}
+PHYSICAL_ACTIONS = {
+    "step_left",
+    "step_right",
+    "move_closer",
+    "move_farther",
+    "lower_camera",
+    "raise_camera",
+    "change_lighting",
+    "expose_for_subject",
 }
 
 
@@ -72,16 +129,51 @@ def validate_live_coach(payload: dict) -> dict:
     return payload
 
 
-def align_live_coach(payload: dict, instruction: str) -> dict:
-    """Keep the model on the move the phone is already showing."""
-    move = " ".join(instruction.split())[:120]
-    if not move:
-        return payload
-    message = " ".join(str(payload.get("message") or "").split())
-    if not message.lower().startswith(move.lower()) or len(message) > 120:
-        payload["message"] = move
+def _confidence(value: object) -> float:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    if number != number or number in (float("inf"), float("-inf")):
+        return 0.0
+    if number < 0:
+        return 0.0
+    if number > 1:
+        return 1.0
+    return number
+
+
+def sanitize_director(cleaned: dict) -> dict:
+    """Keep a supported director decision. An unknown action becomes a no-op the phone ignores."""
+    style = cleaned.get("photographyStyle")
+    cleaned["photographyStyle"] = style if style in PHOTOGRAPHY_STYLES else "auto"
+    preset = cleaned.get("compositionPreset")
+    cleaned["compositionPreset"] = preset if preset in COMPOSITION_PRESETS else "none"
+    issue = cleaned.get("primaryIssue")
+    cleaned["primaryIssue"] = issue if issue in PRIMARY_ISSUES else "none"
+    action = cleaned.get("actionType")
+    if action not in DIRECTOR_ACTIONS:
+        cleaned["actionType"] = "hold"
+        cleaned["compositionPreset"] = "none"
+        cleaned["confidence"] = 0
     else:
-        payload["message"] = message
+        cleaned["actionType"] = action
+        cleaned["confidence"] = _confidence(cleaned.get("confidence"))
+    reason = cleaned.get("actionReason")
+    if not isinstance(reason, str):
+        reason = ""
+    cleaned["actionReason"] = " ".join(reason.split())[:160]
+    if cleaned["actionType"] in PHYSICAL_ACTIONS:
+        cleaned["compositionPreset"] = "none"
+    message = cleaned.get("message")
+    if isinstance(message, str):
+        cleaned["message"] = " ".join(message.split())[:120]
+    return cleaned
+
+
+def accept_director(payload: dict, instruction: str = "") -> dict:
+    """A valid artistic direction stands on its own. The on-device cue is not copied over it."""
+    del instruction
     return payload
 
 
@@ -129,6 +221,7 @@ def normalize_live_coach(payload: object) -> dict:
         cleaned["subjectY"] = None
     if cleaned.get("suggestedLutId") not in LUT_IDS:
         cleaned["suggestedLutId"] = "none"
+    sanitize_director(cleaned)
     return validate_live_coach(cleaned)
 
 

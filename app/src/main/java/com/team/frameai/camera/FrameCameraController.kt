@@ -49,7 +49,7 @@ class FrameCameraController(context: Context) {
     @Volatile private var running = false
     /** CameraX only allows reading the selector on the main thread. Analysis keeps this copy. */
     @Volatile private var facingFront = false
-    private var lastFrameSentAt = 0L
+    @Volatile private var lastFrameSentAt = 0L
     private val frameSendBusy = AtomicBoolean(false)
 
     @Volatile var detector: PrimaryFaceDetector? = null
@@ -362,6 +362,14 @@ class FrameCameraController(context: Context) {
 
     fun finishFrameSend() {
         frameSendBusy.set(false)
+    }
+
+    /** Pulls the next preview upload forward without stacking a second request. */
+    fun requestAnalysisSoon() {
+        if (frameSendBusy.get()) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastFrameSentAt >= FRAME_INTERVAL_MS) return
+        lastFrameSentAt = now - FRAME_INTERVAL_MS
     }
 
     fun canApplyZoom(scale: Float): Boolean {

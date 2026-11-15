@@ -89,6 +89,67 @@
     "isReady": {
       "type": "boolean"
     },
+    "photographyStyle": {
+      "type": "string",
+      "enum": ["auto", "cinematic", "portrait", "street", "landscape"]
+    },
+    "compositionPreset": {
+      "type": "string",
+      "enum": [
+        "none",
+        "centered",
+        "negative_space_left",
+        "negative_space_right",
+        "low_horizon",
+        "high_horizon",
+        "leading_space",
+        "environmental",
+        "street_layer"
+      ]
+    },
+    "primaryIssue": {
+      "type": "string",
+      "enum": [
+        "none",
+        "subject_underexposed",
+        "backlit",
+        "harsh_light",
+        "distracting_background",
+        "clipped_highlights",
+        "tilted_horizon",
+        "weak_separation",
+        "empty_space",
+        "already_strong"
+      ]
+    },
+    "actionType": {
+      "type": "string",
+      "enum": [
+        "hold",
+        "pan_left",
+        "pan_right",
+        "tilt_up",
+        "tilt_down",
+        "straighten",
+        "step_left",
+        "step_right",
+        "move_closer",
+        "move_farther",
+        "lower_camera",
+        "raise_camera",
+        "change_lighting",
+        "expose_for_subject"
+      ]
+    },
+    "actionReason": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "suggestedLutId": {
       "type": "string",
       "enum": [

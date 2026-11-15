@@ -31,7 +31,7 @@ def test_scene_routes_to_contextual_coach(client, monkeypatch):
     monkeypatch.setenv('AI_MODE', 'gemini')
     monkeypatch.setattr(main, '_gemini_configured', lambda: True)
     received = []
-    def coach(image, key, model, composition='subject', instruction=''):
+    def coach(image, key, model, composition='subject', instruction='', style='auto'):
         received.append(composition)
         return {**main._LIVE_MOCK, 'source': 'gemini', 'subject': 'Golfer, club and ball'}
     monkeypatch.setattr(main, 'coach_image', coach)

@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import com.team.frameai.camera.CompositionGuide
 import com.team.frameai.camera.PhotoGrader
 import com.team.frameai.camera.PrimaryFaceDetector
+import com.team.frameai.guide.DirectorSession
 
 private const val CameraRoute = "camera"
 
@@ -23,6 +24,7 @@ fun FrameAiApp(
     photoGrader: PhotoGrader,
     faceDetector: PrimaryFaceDetector? = null,
     compositionGuide: CompositionGuide? = null,
+    director: DirectorSession = DirectorSession(),
 ) {
     var route by rememberSaveable { mutableStateOf(CameraRoute) }
     var photoPath by rememberSaveable { mutableStateOf("") }
@@ -45,6 +47,7 @@ fun FrameAiApp(
             CameraScreen(
                 faceDetector = faceDetector,
                 compositionGuide = compositionGuide,
+                director = director,
                 orientationDegrees = rememberCameraOrientation(),
                 onCaptured = { file, stamp, lutId, guide ->
                     photoPath = file.absolutePath

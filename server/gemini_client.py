@@ -37,11 +37,13 @@ SHOT_LUT_GUIDE = (
 )
 
 PROMPT = (
-    "You are FrameAI, a photography coach looking at one still photo. "
+    "You are FrameAI, a photography mentor looking at one finished photograph. "
     "Return JSON only. sceneType must be portrait, landscape, street, or other. "
     f"{SHOT_LUT_GUIDE}\n"
-    "Give one specific composition improvement a beginner can try on the next frame. "
-    "Do not invent people, locations, or camera settings that are not visible. "
+    "summary is what worked: one or two specific strengths that are visible. "
+    "improvement is the single most important weakness. If you cannot see a real problem, say the photograph is already strong. "
+    "principle is one concrete thing to try on the next shot. "
+    "Do not invent people, objects, light, or places. Do not give a numeric quality score. "
     "Do not claim the phone moved. "
     "Set source to gemini. "
     "Keep summary and improvement under 200 characters, principle under 80, and lutReason under 160."
@@ -77,19 +79,57 @@ GEMINI_SCHEMA = {
 
 
 COACH_PROMPT = (
-    "You are FrameAI, a live photography coach looking at one camera frame. "
+    "You are FrameAI, a photography director looking at one camera frame. "
     "The frame may be a person, a background, or a landscape. A missing face is allowed. "
+    "Decide the single most useful photographic change. Do not describe an arrow someone else already chose. "
     "Return JSON only. Choose the closest reference id from this list, or none:\n"
     f"{REFERENCE_TEXT}\n"
     "sceneType must be portrait, landscape, or other. "
-    "zoom must be in, out, or hold. "
-    "targetZoomRatio is from 1 to 8. Use hold with the ratio closest to how the frame should stay. "
-    "message is one beginner instruction under 120 characters. "
-    "Do not say move left or move right. Zoom, horizon, closer, and farther are allowed. "
-    "Do not invent people or places that are not visible. "
+    "zoom must be in, out, or hold. Leave zoom on hold unless the subject is clearly too small or cut off. "
+    "targetZoomRatio is from 1 to 8. "
+    "A centered subject can be the right composition. Do not move a picture that is already working. "
+    "Do not invent people, objects, or light that are not visible. "
     f"{LUT_GUIDE}\n"
     "Set source to gemini."
 )
+
+DIRECTOR_FIELDS = (
+    "photographyStyle is auto, cinematic, portrait, street, or landscape. Use the requested style when one is given. "
+    "The style changes what you value. It does not force the same composition every time. "
+    "Cinematic: dramatic perspective, intentional negative space, depth, atmosphere, motivated light. "
+    "Portrait: flattering light, eye placement, separation from the background, natural facial proportions. "
+    "Street: leading lines, the place around the subject, and a composition that keeps the moment. "
+    "Landscape: horizon placement, foreground interest, depth, balance, and natural light. "
+    "Auto: choose the approach the picture actually supports. "
+    "compositionPreset is none, centered, negative_space_left, negative_space_right, low_horizon, high_horizon, "
+    "leading_space, environmental, or street_layer. "
+    "negative_space_left puts the subject on the right third with open space on the left. "
+    "negative_space_right puts the subject on the left third with open space on the right. "
+    "Use none when the change is a step, a height change, or a lighting change rather than a new frame target. "
+    "primaryIssue is none, subject_underexposed, backlit, harsh_light, distracting_background, clipped_highlights, "
+    "tilted_horizon, weak_separation, empty_space, or already_strong. "
+    "actionType is hold, pan_left, pan_right, tilt_up, tilt_down, straighten, step_left, step_right, "
+    "move_closer, move_farther, lower_camera, raise_camera, change_lighting, or expose_for_subject. "
+    "pan and tilt aim the phone. step, move_closer, move_farther, lower_camera, and raise_camera move the person. "
+    "Those are not interchangeable. Use a step or a height change when something behind the subject overlaps them "
+    "and sliding the frame would not separate them. "
+    "message is one short instruction a beginner can follow, under 120 characters. "
+    "actionReason is the visible reason, under 160 characters. "
+    "Do not answer with only 'move slightly left', 'adjust your position', or 'improve composition'. "
+    "confidence is from 0 to 1. Use a value under 0.6 when the picture does not support a change. "
+    "targetX and targetY are hints only. The phone recomputes the goal from compositionPreset. "
+    "For a portrait, do not pick a grade that would turn skin pink, blue, or severely clipped. "
+    "isReady is true only when no useful change is visible. "
+    "referenceId matches the preset when one of the listed patterns applies, otherwise none."
+)
+
+STYLE_GUIDE = {
+    "auto": "Requested style: auto. Choose the photographic approach this frame supports.",
+    "cinematic": "Requested style: cinematic. Favor perspective, negative space, depth, and motivated light when the frame supports them.",
+    "portrait": "Requested style: portrait. Favor flattering light, eye placement, and separation. A centered face can be correct.",
+    "street": "Requested style: street. Favor leading lines and the relationship between the subject and the place.",
+    "landscape": "Requested style: landscape. Favor horizon placement, foreground, depth, and natural light. Do not invent a person.",
+}
 
 SCENE_PROMPT = (
     "You are FrameAI in SCENE mode. Read the entire current image to understand the activity and its setting. "
@@ -135,6 +175,57 @@ COACH_SCHEMA = {
         "subjectY": {"type": "NUMBER"},
         "isReady": {"type": "BOOLEAN"},
         "suggestedLutId": {"type": "STRING", "enum": LUT_IDS},
+        "photographyStyle": {"type": "STRING", "enum": ["auto", "cinematic", "portrait", "street", "landscape"]},
+        "compositionPreset": {
+            "type": "STRING",
+            "enum": [
+                "none",
+                "centered",
+                "negative_space_left",
+                "negative_space_right",
+                "low_horizon",
+                "high_horizon",
+                "leading_space",
+                "environmental",
+                "street_layer",
+            ],
+        },
+        "primaryIssue": {
+            "type": "STRING",
+            "enum": [
+                "none",
+                "subject_underexposed",
+                "backlit",
+                "harsh_light",
+                "distracting_background",
+                "clipped_highlights",
+                "tilted_horizon",
+                "weak_separation",
+                "empty_space",
+                "already_strong",
+            ],
+        },
+        "actionType": {
+            "type": "STRING",
+            "enum": [
+                "hold",
+                "pan_left",
+                "pan_right",
+                "tilt_up",
+                "tilt_down",
+                "straighten",
+                "step_left",
+                "step_right",
+                "move_closer",
+                "move_farther",
+                "lower_camera",
+                "raise_camera",
+                "change_lighting",
+                "expose_for_subject",
+            ],
+        },
+        "actionReason": {"type": "STRING"},
+        "confidence": {"type": "NUMBER"},
         "source": {"type": "STRING", "enum": ["gemini"]},
     },
     "required": [
@@ -148,6 +239,12 @@ COACH_SCHEMA = {
         "targetY",
         "isReady",
         "suggestedLutId",
+        "photographyStyle",
+        "compositionPreset",
+        "primaryIssue",
+        "actionType",
+        "actionReason",
+        "confidence",
         "source",
     ],
 }
@@ -218,25 +315,34 @@ def review_image(image: bytes, api_key: str, model_id: str) -> dict:
     return normalize_gemini_payload(json.loads(text))
 
 
+def build_coach_prompt(composition: str, instruction: str = "", style: str = "auto") -> str:
+    """Ask for a director decision. An on-device cue is context, not a required sentence."""
+    base = SCENE_PROMPT if composition == "scene" else COACH_PROMPT
+    chosen = style if style in STYLE_GUIDE else "auto"
+    parts = [base, DIRECTOR_FIELDS, STYLE_GUIDE[chosen]]
+    move = " ".join(instruction.split())[:120]
+    if composition != "scene" and move:
+        parts.append(
+            "The phone is currently showing this on-device cue as context only: "
+            f"{move} "
+            "Keep it when the picture supports it. Propose a different action when a better change is visible. "
+            "Do not copy the cue unless it is still the best next step."
+        )
+    return "\n".join(parts)
+
+
 def coach_image(
     image: bytes,
     api_key: str,
     model_id: str,
     composition: str = "subject",
     instruction: str = "",
+    style: str = "auto",
 ) -> dict:
     client = _client(api_key)
     from google.genai import types
 
-    prompt = SCENE_PROMPT if composition == "scene" else COACH_PROMPT
-    move = " ".join(instruction.split())[:120]
-    if composition != "scene" and move:
-        prompt += (
-            " The on-device guide already chose the move. "
-            f"The message must start with this exact instruction: {move} "
-            "Do not recommend a different move, direction, zoom, or horizon. "
-            "You may add one short reason after that sentence. Keep the full message under 120 characters."
-        )
+    prompt = build_coach_prompt(composition, instruction, style)
     response = client.models.generate_content(
         model=model_id,
         contents=[

@@ -14,6 +14,7 @@ object SceneComposition {
         reply == null -> SceneAdvice("Waiting for scene analysis", "Hold briefly. Keep the action and important details visible; you can take a photo at any time.")
         reply.source == "demo_mock" -> SceneAdvice("Demo scene suggestion", reply.message)
         reply.source != "gemini" -> SceneAdvice("Scene analysis unavailable", "No fresh AI scene analysis. Frame it your way and take a photo whenever you like.")
+        reply.actionReason.isNotBlank() -> SceneAdvice(reply.message, reply.actionReason, reply.isReady)
         else -> SceneAdvice(reply.subject, reply.message, reply.isReady)
     }
 }

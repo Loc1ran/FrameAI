@@ -18,6 +18,15 @@ data class LiveCoach(
     val source: String,
     val subjectX: Double? = null,
     val subjectY: Double? = null,
+    /** How the director should weigh this frame. The phone does not turn this into a fixed target. */
+    val photographyStyle: String = "auto",
+    /** A supported composition. The phone turns this into a target. It does not copy model coordinates. */
+    val compositionPreset: String = "none",
+    val primaryIssue: String = "none",
+    /** Pan, tilt, step, height, or light. Physical moves do not draw a dashed subject box. */
+    val actionType: String = "hold",
+    val actionReason: String = "",
+    val confidence: Double = 0.0,
 ) {
     init {
         require(sceneType in SCENE_TYPES) { "sceneType" }
@@ -31,6 +40,12 @@ data class LiveCoach(
         subjectY?.let { require(it in 0.0..1.0) { "subjectY" } }
         require(suggestedLutId in LutIds.SUGGESTABLE) { "suggestedLutId" }
         require(source in SOURCES) { "source" }
+        require(photographyStyle in STYLES) { "photographyStyle" }
+        require(compositionPreset in PRESETS) { "compositionPreset" }
+        require(primaryIssue in ISSUES) { "primaryIssue" }
+        require(actionType in ACTIONS) { "actionType" }
+        require(actionReason.length <= 160) { "actionReason" }
+        require(confidence in 0.0..1.0) { "confidence" }
     }
 
     companion object {
@@ -47,5 +62,55 @@ data class LiveCoach(
         val ZOOM = setOf("in", "out", "hold")
         val SOURCES = setOf("gemini", "offline_rules", "demo_mock")
         val HORIZON_IDS = setOf("landscape_low_horizon", "landscape_high_horizon")
+        val STYLES = setOf("auto", "cinematic", "portrait", "street", "landscape")
+        val PRESETS = setOf(
+            "none",
+            "centered",
+            "negative_space_left",
+            "negative_space_right",
+            "low_horizon",
+            "high_horizon",
+            "leading_space",
+            "environmental",
+            "street_layer",
+        )
+        val ISSUES = setOf(
+            "none",
+            "subject_underexposed",
+            "backlit",
+            "harsh_light",
+            "distracting_background",
+            "clipped_highlights",
+            "tilted_horizon",
+            "weak_separation",
+            "empty_space",
+            "already_strong",
+        )
+        val ACTIONS = setOf(
+            "hold",
+            "pan_left",
+            "pan_right",
+            "tilt_up",
+            "tilt_down",
+            "straighten",
+            "step_left",
+            "step_right",
+            "move_closer",
+            "move_farther",
+            "lower_camera",
+            "raise_camera",
+            "change_lighting",
+            "expose_for_subject",
+        )
+        val PHYSICAL = setOf(
+            "step_left",
+            "step_right",
+            "move_closer",
+            "move_farther",
+            "lower_camera",
+            "raise_camera",
+            "change_lighting",
+            "expose_for_subject",
+        )
     }
 }
