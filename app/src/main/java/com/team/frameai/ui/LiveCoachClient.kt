@@ -20,19 +20,20 @@ class LiveCoachClient(
 ) {
     val enabled: Boolean get() = baseUrl.isNotBlank() && demoToken.isNotBlank()
 
-    suspend fun coach(jpeg: ByteArray): LiveCoach? {
+    suspend fun coach(jpeg: ByteArray, scene: Boolean = false): LiveCoach? {
         if (!enabled) return null
         return try {
             withTimeout(12_000) {
-                withContext(Dispatchers.IO) { post(jpeg) }
+                withContext(Dispatchers.IO) { post(jpeg, scene) }
             }
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun post(jpeg: ByteArray): LiveCoach? {
-        val endpoint = baseUrl.trimEnd('/') + "/v1/live-coach"
+    private fun post(jpeg: ByteArray, scene: Boolean): LiveCoach? {
+        val composition = if (scene) "scene" else "subject"
+        val endpoint = baseUrl.trimEnd('/') + "/v1/live-coach?composition=$composition"
         val boundary = "frameai-" + UUID.randomUUID()
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -46,6 +47,7 @@ class LiveCoachClient(
         try {
             connection.outputStream.use { it.write(multipart(jpeg, boundary)) }
             if (connection.responseCode != 200) return null
+            if (scene && connection.getHeaderField("X-FrameAI-Composition") != "scene") return null
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             if (body.isBlank()) return null
             return ContractJson.parseLiveCoach(body)
