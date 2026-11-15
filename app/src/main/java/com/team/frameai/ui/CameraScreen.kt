@@ -69,6 +69,7 @@ fun CameraScreen(
     var aiFailed by remember { mutableStateOf(false) }
     var aiReplyAt by remember { mutableLongStateOf(0L) }
     var aiReply by remember { mutableStateOf<LiveCoach?>(null) }
+    var aiForInstruction by remember { mutableStateOf<String?>(null) }
     var aiStatus by remember { mutableStateOf("Waiting for a scene suggestion…") }
     var resumed by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
@@ -114,14 +115,20 @@ fun CameraScreen(
         controller.onFrameJpeg = { jpeg ->
             val requestMode = mode
             val requestGeneration = modeGeneration
+            val requestInstruction = if (requestMode == CompositionMode.SCENE) "" else framingHint(live, area).title
             scope.launch {
                 try {
-                    val reply = client.coach(jpeg, scene = requestMode == CompositionMode.SCENE)
+                    val reply = client.coach(
+                        jpeg,
+                        scene = requestMode == CompositionMode.SCENE,
+                        instruction = requestInstruction,
+                    )
                     if (cloudOn && resumed && mode == requestMode && modeGeneration == requestGeneration) {
                         aiReply = reply
+                        aiForInstruction = requestInstruction
                         aiFailed = reply == null
                         aiReplyAt = SystemClock.elapsedRealtime()
-                        aiStatus = if (reply == null) "AI unavailable. You can still take a photo." else ""
+                        aiStatus = if (reply == null) "AI unavailable. The guide above is the move to follow." else ""
                         if (reply?.suggestedLutId in com.team.frameai.lut.LutPack.ids) {
                             controller.suggestedLutId = reply!!.suggestedLutId
                         }
@@ -218,8 +225,16 @@ fun CameraScreen(
                     Text("The guide is off. You can take a photo at any time.", color = FrameMuted, fontSize = 12.sp)
                 }
                 if (cloudOn) {
-                    Text("AI SUGGESTION · previews shared while on", color = FrameGold, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
-                    if (mode == CompositionMode.SUBJECT) Text(aiReply?.message ?: aiStatus, color = FrameMuted, fontSize = 12.sp, maxLines = 2)
+                    Text("AI SUGGESTION · same move as the guide", color = FrameGold, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
+                    if (mode == CompositionMode.SUBJECT) {
+                        Text(
+                            matchingSuggestion(hint.title, aiReply?.message, aiForInstruction),
+                            color = FrameMuted,
+                            fontSize = 12.sp,
+                            maxLines = 3,
+                        )
+                    }
+                    if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 12.sp)
                 }
                 error?.let { Text(it, color = FrameGold, fontSize = 12.sp) }
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {

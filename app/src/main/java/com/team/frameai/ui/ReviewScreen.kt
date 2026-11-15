@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,6 +66,7 @@ fun ReviewScreen(
     var openFailed by remember(originalPath) { mutableStateOf(false) }
     var bestMatch by remember(originalPath) { mutableStateOf(suggestedLut.takeIf { it in LutPack.ids }) }
     var matchReason by remember(originalPath) { mutableStateOf<String?>(null) }
+    var rankedIds by remember(originalPath) { mutableStateOf<List<String>>(emptyList()) }
 
     BackHandler { if (!busy) onRetake() }
     LaunchedEffect(originalPath) {
@@ -85,19 +87,20 @@ fun ReviewScreen(
         }
         if (!client.cloudConfigured || decoded == null) return@LaunchedEffect
         try {
-            status = "Choosing a look…"
+            status = "Choosing 10 looks…"
             val jpeg = withContext(Dispatchers.Default) { ImageSaver.jpegForReview(decoded) }
             val review = client.review(jpeg, cloudEnabled = true)
-            if (review.source == "gemini" && review.suggestedLutId in LutPack.ids) {
-                bestMatch = review.suggestedLutId
-                matchReason = review.lutReason
+            if (review.source == "gemini") {
+                bestMatch = review.suggestedLutId.takeIf { it in LutPack.ids }
+                matchReason = review.lutReason.takeIf { bestMatch != null }
+                if (review.candidateLutIds.isNotEmpty()) rankedIds = review.candidateLutIds
             }
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (_: Exception) {
-            // The full list stays available when the choice does not arrive.
+            // The starting row stays available when the ranking does not arrive.
         } finally {
-            if (status == "Choosing a look…") status = null
+            if (status == "Choosing 10 looks…") status = null
         }
     }
 
@@ -116,13 +119,65 @@ fun ReviewScreen(
     val shown = visibleEdit?.bitmap ?: original
     val outputLabel = if (visibleEdit == null) "original" else "edit"
 
-    @Composable
-    fun LookChoices(title: String, looks: List<LutPack.Look>) {
-        if (looks.isEmpty()) return
-        Text(title, color = FramePaper, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
-        val ordered = looks.sortedWith(compareBy<LutPack.Look> { if (it.id == bestMatch) 0 else 1 }.thenBy { it.name })
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ordered.forEach { look ->
+    val shownLooks = reviewLookIds(rankedIds, bestMatch, edited?.lutId).mapNotNull { id ->
+        LutPack.looks.firstOrNull { it.id == id }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().background(FrameInk)
+            .safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Your photo", color = FramePaper, fontSize = 24.sp, modifier = Modifier.weight(1f))
+            TextButton(enabled = !busy, onClick = onRetake) { Text("Retake") }
+        }
+        Text(
+            visibleEdit?.let { "Edited · ${lutLabel(it.lutId)}" } ?: "Original",
+            color = FramePaper,
+        )
+        if (shown != null) {
+            Image(
+                bitmap = shown.asImageBitmap(),
+                contentDescription = visibleEdit?.let { "Edited photo, ${lutLabel(it.lutId)}" } ?: "Original photo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).height(300.dp)
+                    .clip(RoundedCornerShape(16.dp)).background(FrameSurface),
+            )
+        } else if (!openFailed) {
+            Text("Opening photo…", color = FrameMuted, modifier = Modifier.padding(vertical = 32.dp))
+        }
+
+        Text("02   CHOOSE YOUR COLOR", color = FrameGold, fontSize = 11.sp)
+        Text(
+            if (rankedIds.isEmpty()) {
+                "Swipe right for 10 looks. Apply one at a time. Save keeps the photo on screen."
+            } else {
+                "Swipe right through the 10 looks chosen for this photo. Apply one at a time. Save keeps the photo on screen."
+            },
+            color = FrameMuted,
+            fontSize = 12.sp,
+        )
+        bestMatch?.let { id ->
+            val lead = if (matchReason != null) "Best match" else "From this frame"
+            Text(
+                "$lead: ${lutLabel(id)}" + (matchReason?.let { reason -> ". $reason" } ?: ""),
+                color = FrameGold,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = !showEdited,
+                enabled = original != null && !busy,
+                onClick = { showEdited = false; status = null },
+                label = { Text("Original") },
+            )
+            shownLooks.forEach { look ->
                 FilterChip(
                     selected = visibleEdit?.lutId == look.id,
                     enabled = original != null && !busy,
@@ -161,57 +216,6 @@ fun ReviewScreen(
                 )
             }
         }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize().background(FrameInk)
-            .safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Your photo", color = FramePaper, fontSize = 24.sp, modifier = Modifier.weight(1f))
-            TextButton(enabled = !busy, onClick = onRetake) { Text("Retake") }
-        }
-        Text(
-            visibleEdit?.let { "Edited · ${lutLabel(it.lutId)}" } ?: "Original",
-            color = FramePaper,
-        )
-        if (shown != null) {
-            Image(
-                bitmap = shown.asImageBitmap(),
-                contentDescription = visibleEdit?.let { "Edited photo, ${lutLabel(it.lutId)}" } ?: "Original photo",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).height(300.dp)
-                    .clip(RoundedCornerShape(16.dp)).background(FrameSurface),
-            )
-        } else if (!openFailed) {
-            Text("Opening photo…", color = FrameMuted, modifier = Modifier.padding(vertical = 32.dp))
-        }
-
-        Text("02   CHOOSE YOUR COLOR", color = FrameGold, fontSize = 11.sp)
-        Text(
-            "Apply one look at a time. Save keeps the photo on screen, and you can try another after that.",
-            color = FrameMuted,
-            fontSize = 12.sp,
-        )
-        bestMatch?.let { id ->
-            val lead = if (matchReason != null) "Best match" else "From this frame"
-            Text(
-                "$lead: ${lutLabel(id)}" + (matchReason?.let { reason -> ". $reason" } ?: ""),
-                color = FrameGold,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = !showEdited,
-                enabled = original != null && !busy,
-                onClick = { showEdited = false; status = null },
-                label = { Text("Original") },
-            )
-        }
-        LookChoices("Film and cinema", LutPack.looks.filter { it.phoneJpeg })
-        LookChoices("Camera conversions", LutPack.looks.filter { !it.phoneJpeg })
         if (busy) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
         }
@@ -313,6 +317,23 @@ fun ReviewScreen(
         ) { Text("Get photo tip") }
         coaching?.let { CoachingCard(it) }
     }
+}
+
+internal fun reviewLookIds(aiIds: List<String>, suggestedId: String?, keepId: String? = null): List<String> {
+    val phone = LutPack.looks.filter { it.phoneJpeg }.map { it.id }
+    val phoneSet = phone.toSet()
+    val ranked = aiIds.filter { it in phoneSet }.distinct().take(10)
+    val base = (if (ranked.isNotEmpty()) {
+        val lead = suggestedId?.takeIf { it in phoneSet }
+        if (lead != null) listOf(lead) + ranked.filter { it != lead } else ranked
+    } else {
+        listOfNotNull(suggestedId?.takeIf { it in phoneSet }) + phone
+    }).distinct().take(10).toMutableList()
+    if (keepId != null && keepId in phoneSet && keepId !in base) {
+        if (base.size == 10) base.removeAt(base.lastIndex)
+        base.add(0, keepId)
+    }
+    return base
 }
 
 @Composable

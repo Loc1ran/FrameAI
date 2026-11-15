@@ -19,10 +19,9 @@ def _local_schema(name: str) -> dict:
     return schema
 
 
-LUT_IDS = {
-    item["id"]
-    for item in json.loads((CONTRACTS / "luts.json").read_text(encoding="utf-8"))["looks"]
-} | {"none"}
+_LUT_LOOKS = json.loads((CONTRACTS / "luts.json").read_text(encoding="utf-8"))["looks"]
+LUT_IDS = {item["id"] for item in _LUT_LOOKS} | {"none"}
+PHONE_LUT_IDS = {item["id"] for item in _LUT_LOOKS if item["phoneJpeg"]}
 SHOT_REVIEW_SCHEMA = _local_schema("shot-review.schema.json")
 LIVE_GUIDE_SCHEMA = _local_schema("live-guide.schema.json")
 LIVE_COACH_SCHEMA = _local_schema("live-coach.schema.json")
@@ -37,6 +36,7 @@ ALLOWED_SHOT_KEYS = {
     "principle",
     "suggestedLutId",
     "lutReason",
+    "candidateLutIds",
     "source",
 }
 
@@ -72,11 +72,49 @@ def validate_live_coach(payload: dict) -> dict:
     return payload
 
 
+def align_live_coach(payload: dict, instruction: str) -> dict:
+    """Keep the model on the move the phone is already showing."""
+    move = " ".join(instruction.split())[:120]
+    if not move:
+        return payload
+    message = " ".join(str(payload.get("message") or "").split())
+    if not message.lower().startswith(move.lower()) or len(message) > 120:
+        payload["message"] = move
+    else:
+        payload["message"] = message
+    return payload
+
+
+def top_phone_luts(raw: object, suggested: object) -> list[str]:
+    """Keep at most 10 phone-photo looks, with the chosen look first."""
+    found: list[str] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str) and item in PHONE_LUT_IDS and item not in found:
+                found.append(item)
+            if len(found) == 10:
+                break
+    if isinstance(suggested, str) and suggested in PHONE_LUT_IDS:
+        found = [suggested, *[item for item in found if item != suggested]]
+    return found[:10]
+
+
 def normalize_gemini_payload(payload: object) -> dict:
     if not isinstance(payload, dict):
         raise ValidationError("model output was not a JSON object")
     cleaned = {key: payload[key] for key in ALLOWED_SHOT_KEYS if key in payload}
     cleaned["source"] = "gemini"
+    suggested = cleaned.get("suggestedLutId")
+    if suggested not in PHONE_LUT_IDS:
+        suggested = None
+    ranked = top_phone_luts(payload.get("candidateLutIds"), suggested)
+    if ranked:
+        cleaned["candidateLutIds"] = ranked
+        cleaned["suggestedLutId"] = ranked[0]
+    else:
+        cleaned.pop("candidateLutIds", None)
+        if cleaned.get("suggestedLutId") not in LUT_IDS:
+            cleaned["suggestedLutId"] = "none"
     return validate_shot_review(cleaned)
 
 

@@ -34,6 +34,8 @@ class FrameCameraController(context: Context) {
     private val subjectTracker = MlKitSubjectTracker()
     @Volatile private var generation = 0
     @Volatile private var running = false
+    /** CameraX only allows reading the selector on the main thread. Analysis keeps this copy. */
+    @Volatile private var facingFront = false
     private var lastFrameSentAt = 0L
     private val frameSendBusy = AtomicBoolean(false)
 
@@ -48,6 +50,7 @@ class FrameCameraController(context: Context) {
 
     init {
         lifecycleController.cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
+        facingFront = false
         lifecycleController.imageCaptureMode = ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
     }
 
@@ -215,10 +218,7 @@ class FrameCameraController(context: Context) {
         }
     }
 
-    private fun frontCamera(): Boolean {
-        return lifecycleController.cameraSelector.lensFacing ==
-            androidx.camera.core.CameraSelector.LENS_FACING_FRONT
-    }
+    private fun frontCamera(): Boolean = facingFront
 
     private fun maybeSendFrame(image: androidx.camera.core.ImageProxy) {
         if (!captureFrames) return
