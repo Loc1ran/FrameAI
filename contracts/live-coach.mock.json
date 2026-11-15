@@ -1,0 +1,14 @@
+{
+  "sceneType": "portrait",
+  "subject": "person",
+  "referenceId": "portrait_space_left",
+  "message": "Zoom in until the person is larger, then leave open space on one side.",
+  "zoom": "in",
+  "targetZoomRatio": 1.6,
+  "targetX": 0.67,
+  "targetY": 0.33,
+  "subjectX": 0.48,
+  "subjectY": 0.46,
+  "isReady": false,
+  "source": "demo_mock"
+}

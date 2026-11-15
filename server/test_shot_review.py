@@ -3,7 +3,14 @@ from fastapi.testclient import TestClient
 from jsonschema.exceptions import ValidationError
 
 import main
-from validate import load_json, normalize_gemini_payload, validate_live_guide, validate_shot_review
+from validate import (
+    load_json,
+    normalize_gemini_payload,
+    normalize_live_coach,
+    validate_live_coach,
+    validate_live_guide,
+    validate_shot_review,
+)
 
 JPEG = b"\xff\xd8\xff\xd9"
 
@@ -45,10 +52,15 @@ def test_gemini_normalizer_forces_source_and_drops_extras():
     assert "debug" not in cleaned
 
 
-def test_health(client):
+def test_health(client, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "aiMode": "mock"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["aiMode"] == "mock"
+    assert body["geminiConfigured"] is False
 
 
 def test_mock_review_matches_contract(client):
@@ -97,6 +109,7 @@ def test_rejects_non_jpeg_and_oversize(client):
 def test_gemini_without_key_is_not_a_fake_success(client, monkeypatch):
     monkeypatch.setenv("AI_MODE", "gemini")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
     response = client.post(
         "/v1/shot-review",
         headers={"X-Demo-Token": "localtest"},
@@ -119,6 +132,40 @@ def test_gemini_busy_does_not_call_the_model(client, monkeypatch):
         assert response.status_code == 429
     finally:
         main._gemini_lock.release()
+
+
+def test_mock_live_coach_matches_contract(client):
+    response = client.post(
+        "/v1/live-coach",
+        headers={"X-Demo-Token": "localtest"},
+        files={"image": ("sample.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    validate_live_coach(body)
+    assert body["source"] == "demo_mock"
+    assert body == load_json("live-coach.mock.json")
+
+
+def test_live_coach_rejects_an_unknown_reference():
+    payload = load_json("live-coach.mock.json")
+    payload["referenceId"] = "from_the_internet"
+    payload["source"] = "gemini"
+    with pytest.raises(ValidationError):
+        normalize_live_coach(payload)
+
+
+def test_live_coach_without_key_is_not_a_fake_success(client, monkeypatch):
+    monkeypatch.setenv("AI_MODE", "gemini")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    response = client.post(
+        "/v1/live-coach",
+        headers={"X-Demo-Token": "localtest"},
+        files={"image": ("sample.jpg", JPEG, "image/jpeg")},
+    )
+    assert response.status_code == 503
+    assert "message" not in response.json()
 
 
 def test_unconfigured_mode(client, monkeypatch):

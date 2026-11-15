@@ -3,6 +3,8 @@ package com.team.frameai.guide
 import com.team.frameai.frameFile
 import com.team.frameai.model.AdviceSource
 import com.team.frameai.model.FaceBoxNormalized
+import com.team.frameai.model.LutIds
+import com.team.frameai.model.SceneRead
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -24,6 +26,85 @@ class GuideEngineTest {
         assertEquals(AdviceSource.OFFLINE_RULES.wire, guide.source)
         assertEquals(GuideEngine.DEFAULT_TARGET_X.toDouble(), guide.targetX, 0.0001)
         assertEquals(GuideEngine.DEFAULT_TARGET_Y.toDouble(), guide.targetY, 0.0001)
+    }
+
+    @Test
+    fun eitherThirdCanBeReady() {
+        val right = engine.suggest(boxAt(0.67f, 0.33f))
+        val left = engine.suggest(boxAt(0.33f, 0.33f))
+        assertEquals(GuideEngine.KIND_READY, right.kind)
+        assertEquals(GuideEngine.KIND_READY, left.kind)
+        assertEquals(0.33, left.targetX, 0.0001)
+    }
+
+    @Test
+    fun aLargeFaceIsNotReadyJustBecauseItSitsOnAThird() {
+        val guide = engine.suggest(areaAt(0.50f, 0.40f, 0.56f, 0.36f))
+        assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
+        assertEquals(GuideEngine.LARGE_MESSAGE, guide.message)
+    }
+
+    @Test
+    fun aCutOffFaceIsCalledOutBeforePlacement() {
+        val guide = engine.suggest(areaAt(0.10f, 0.33f, 0.22f, 0.30f))
+        assertEquals(GuideEngine.EDGE_MESSAGE, guide.message)
+    }
+
+    @Test
+    fun aBrightSideMovesTheFaceToTheCalmerThird() {
+        val brightLeft = SceneRead(leftLuma = 0.82f, rightLuma = 0.28f, warmth = 0.2f)
+        val guide = engine.suggest(boxAt(0.33f, 0.33f), scene = brightLeft)
+        assertEquals(0.67, guide.targetX, 0.0001)
+        assertEquals(GuideEngine.PLACE_ANY_MESSAGE, guide.message)
+        assertEquals(LutIds.WARM_FILM, brightLeft.lookId)
+        val settled = engine.suggest(boxAt(0.67f, 0.33f), scene = brightLeft)
+        assertEquals(GuideEngine.KIND_READY, settled.kind)
+        assertEquals(GuideEngine.READY_WARM, settled.message)
+    }
+
+    @Test
+    fun aBalancedFrameWithoutAPersonIsReady() {
+        val even = SceneRead(leftLuma = 0.4f, rightLuma = 0.42f, warmth = 0.02f)
+        val guide = engine.suggest(null, scene = even)
+        assertEquals(GuideEngine.KIND_READY, guide.kind)
+        assertEquals(GuideEngine.OPEN_READY, guide.message)
+        assertTrue(guide.isReady)
+        assertFalse(guide.message.contains("face", ignoreCase = true))
+    }
+
+    @Test
+    fun aHorizonInTheMiddleMovesToTheNearerGridLine() {
+        val sky = SceneRead(leftLuma = 0.5f, rightLuma = 0.48f, warmth = 0.1f, horizonY = 0.5f)
+        val guide = engine.suggest(null, scene = sky)
+        assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
+        assertEquals(0.33, guide.targetY, 0.0001)
+        assertEquals(GuideEngine.HORIZON_UPPER, guide.message)
+        assertEquals(0.5, guide.subjectY!!, 0.0001)
+    }
+
+    @Test
+    fun aHorizonOnAGridLineIsReady() {
+        val sky = SceneRead(leftLuma = 0.5f, rightLuma = 0.48f, warmth = 0.0f, horizonY = 0.67f)
+        val guide = engine.suggest(null, scene = sky)
+        assertEquals(GuideEngine.KIND_READY, guide.kind)
+        assertEquals(GuideEngine.HORIZON_READY, guide.message)
+        assertTrue(guide.isReady)
+    }
+
+    @Test
+    fun aBrightSideWithoutAPersonStillPlacesTheSubject() {
+        val brightLeft = SceneRead(leftLuma = 0.8f, rightLuma = 0.3f, warmth = 0.0f)
+        val guide = engine.suggest(null, scene = brightLeft)
+        assertEquals(0.67, guide.targetX, 0.0001)
+        assertEquals(GuideEngine.PLACE_ANY_MESSAGE, guide.message)
+    }
+
+    @Test
+    fun coolBackgroundSelectsCoolCinema() {
+        val cool = SceneRead(leftLuma = 0.4f, rightLuma = 0.42f, warmth = -0.3f)
+        val guide = engine.suggest(boxAt(0.67f, 0.33f), scene = cool)
+        assertEquals(GuideEngine.READY_COOL, guide.message)
+        assertEquals(LutIds.COOL_CINEMA, cool.lookId)
     }
 
     @Test
@@ -84,14 +165,28 @@ class GuideEngineTest {
     fun smootherThrottlesSameKindAndReleasesOnNoFace() {
         val smoother = GuideSmoother(minIntervalMs = 250, smoothing = 1f)
         val first = smoother.update(boxAt(0.20f, 0.20f), nowMs = 0)
-        val second = smoother.update(boxAt(0.40f, 0.40f), nowMs = 100)
+        val second = smoother.update(boxAt(0.22f, 0.22f), nowMs = 100)
         assertSame(first, second)
         val lost = smoother.update(null, nowMs = 120)
         assertEquals(GuideEngine.KIND_NO_FACE, lost.kind)
         val moved = GuideSmoother(minIntervalMs = 250, smoothing = 1f)
         moved.update(boxAt(0.20f, 0.20f), nowMs = 0)
-        val later = moved.update(boxAt(0.40f, 0.40f), nowMs = 250)
-        assertEquals(0.40, later.subjectX!!, 0.0001)
+        val later = moved.update(boxAt(0.15f, 0.20f), nowMs = 250)
+        assertEquals(0.15, later.subjectX!!, 0.0001)
+    }
+
+    @Test
+    fun lostFaceDoesNotStayReadyAndTheNextFaceShowsImmediately() {
+        val smoother = GuideSmoother(minIntervalMs = 250, smoothing = 0.5f)
+        val ready = smoother.update(boxAt(0.67f, 0.33f), nowMs = 0)
+        assertEquals(GuideEngine.KIND_READY, ready.kind)
+        val gone = smoother.update(null, nowMs = 40)
+        assertEquals(GuideEngine.KIND_NO_FACE, gone.kind)
+        assertNull(gone.subjectX)
+        assertFalse(gone.isReady)
+        val back = smoother.update(boxAt(0.20f, 0.80f), nowMs = 50)
+        assertEquals(GuideEngine.KIND_ALIGN, back.kind)
+        assertEquals(0.20, back.subjectX!!, 0.0001)
     }
 
     @Test
@@ -104,5 +199,16 @@ class GuideEngineTest {
 
     private fun boxAt(centerX: Float, centerY: Float): FaceBoxNormalized {
         return FaceBoxNormalized(centerX, centerY, centerX, centerY, centerX, centerY)
+    }
+
+    private fun areaAt(centerX: Float, centerY: Float, width: Float, height: Float): FaceBoxNormalized {
+        return FaceBoxNormalized(
+            centerX,
+            centerY,
+            centerX - width / 2f,
+            centerY - height / 2f,
+            centerX + width / 2f,
+            centerY + height / 2f,
+        )
     }
 }

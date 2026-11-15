@@ -15,8 +15,8 @@ object OfflineCoach {
         return when (guide.kind) {
             GuideEngine.KIND_NO_FACE -> ShotReview(
                 sceneType = "other",
-                summary = "Offline tip — no face is in the frame.",
-                improvement = "Use the grid to place your subject near a thirds intersection.",
+                summary = "Offline tip — the frame has no person, and it can still be a picture.",
+                improvement = "Match the solid frame to the dashed goal, then take the photo.",
                 principle = "rule of thirds",
                 suggestedLutId = LutIds.WARM_FILM,
                 lutReason = "Warm Film is a safe default until a subject is in frame.",
@@ -24,8 +24,8 @@ object OfflineCoach {
             )
             GuideEngine.KIND_READY -> ShotReview(
                 sceneType = "portrait",
-                summary = "Offline tip — the face is near the portrait target.",
-                improvement = "Hold this frame and leave a little open space opposite the face.",
+                summary = "Offline tip — the current frame matches the goal.",
+                improvement = "Hold this frame and take the photo.",
                 principle = "rule of thirds",
                 suggestedLutId = LutIds.WARM_FILM,
                 lutReason = "Warm Film fits a portrait when the framing is ready.",
@@ -33,8 +33,8 @@ object OfflineCoach {
             )
             else -> ShotReview(
                 sceneType = "portrait",
-                summary = "Offline tip — the face is away from the target.",
-                improvement = "Align the face with the target circle, then take the photo.",
+                summary = "Offline tip — the current frame does not match the goal yet.",
+                improvement = "Move until the solid frame sits on the dashed goal, then take the photo.",
                 principle = "rule of thirds",
                 suggestedLutId = LutIds.WARM_FILM,
                 lutReason = "Warm Film keeps portrait skin tones natural.",

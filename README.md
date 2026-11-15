@@ -2,7 +2,7 @@
 
 HackUTA 2026 — Android camera that helps beginners make better cinematic photographs.
 
-**Offline MVP first:** live framing guidance → real capture → LUT grading. Optional Gemini coaching after the user asks.
+**Current plan:** `docs/three-developer-gemini-coach-plan.md`. The camera coaches any subject. The preview shows a dashed goal and a solid current frame, not a paragraph. Gemini, when called, reads the current frame.
 
 ## Stack
 
@@ -17,38 +17,36 @@ Package: `com.team.frameai` · minSdk 26
 
 | Path | Owner |
 |------|--------|
-| `app/camera`, `app/ui`, Gradle/Manifest | Developer A |
+| `app/camera`, `app/ui`, Gradle/Manifest | Developer A, installed by C on the phone |
 | `app/vision`, `app/guide`, `app/lut`, assets | Developer B |
 | `contracts/` | Frozen jointly — do not invent field names |
-| `server/` | Optional cloud (B or C) |
-| `docs/` | Playbook + notes |
+| `server/` | Developer C, on this PC |
+| `docs/three-developer-gemini-coach-plan.md` | Current plan |
 
 ## Frozen LUT IDs
 
 - `warm_film`
 - `cool_cinema`
 
-The asset folder also contains the full downloaded library (100+ looks). `LutPack.looks` lists them. Gemini may still only suggest the two ids above, or `none`.
+The review screen offers only those two looks. `warm_film` is the packaged `cinematic_04` file and `cool_cinema` is `cinematic_08`, applied at strength 0.85. Other files in the asset folder are not selectable. Shot review may suggest only these two ids, or `none`.
 
 ## Quick start (Android Studio)
 
-Developer A owns the camera app on `feat/android-camera`.
-
-1. Install JDK 17 and Android SDK 34.
+1. Install JDK 21 and Android SDK 34. The app build uses JDK 21 because the Android Studio runtime is too new for this Gradle version.
 2. Open this folder in Android Studio, or from the repo root run `gradlew.bat assembleDebug`.
 3. Connect a physical Android phone with USB debugging and install the debug APK.
-4. Optional cloud coaching stays off until `local.properties` (not committed) contains `frameai.baseUrl` and `frameai.demoToken`.
+4. The phone calls this PC over USB with `adb reverse tcp:8080 tcp:8080`. It does not need the same Wi-Fi, and it does not call Google directly.
 5. If the project folder locks build files, set `frameai.buildDir` in `local.properties` to a directory outside that folder.
 
 `MainActivity` uses ML Kit face detection, `GuideEngine`, and the bundled `.cube` grades. Warm Film and Cool Cinema are the review chips. The original JPEG is not overwritten.
 
 ## Demo journey (90s)
 
-1. Open FrameAI → rear camera preview + rule-of-thirds grid.
-2. Point at a teammate → face target + short framing tip (offline).
-3. Capture → original JPEG saved (never overwritten by edit).
-4. Apply Warm Film or Cool Cinema → before/after → save.
-5. Optional: **Why this shot?** → Gemini coaching, or labeled offline tip if cloud is down.
+1. Open FrameAI. The rear preview shows the rule-of-thirds grid.
+2. Point at a person, a place, or an object. A dashed frame is the goal, a solid frame is the current view, and an arrow connects them.
+3. When they match, the mark turns green and a check appears.
+4. Capture. The original JPEG is kept.
+5. Apply Warm Film or Cool Cinema as a separate edit.
 
 ## Contracts
 
@@ -64,18 +62,27 @@ brain\gradlew.bat test
 
 Developer A compiles those sources with the app. `MlKitPrimaryFaceDetector` does not close the `ImageProxy`; the camera controller does.
 
-Optional review server, mock mode, from `server/`:
+Shared AI server, from `server/`. Other developers call this. Credentials stay on the machine that runs the server and are not committed.
 
 ```
-py -3 -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-$env:AI_MODE = "mock"
-$env:DEMO_TOKEN = "localtest"
-uvicorn main:app --host 127.0.0.1 --port 8080
+copy ..\.env.example .env
 ```
 
-Handoff details: `docs/developer-b-handoff.md`.
+Google Cloud login, when an API key is not available:
+
+```
+powershell -c "iex (irm https://storage.googleapis.com/cloud-samples-data/adc/setup_adc.ps1)"
+```
+
+Put the project ID in `GOOGLE_CLOUD_PROJECT`, set `AI_MODE=gemini`, and leave `GEMINI_API_KEY` empty. An API key in `GEMINI_API_KEY` still works and does not need that login. Then:
+
+```
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8080
+```
+
+`GET /health` shows `geminiConfigured` without revealing the key. `POST /v1/live-coach` and `POST /v1/shot-review` take a JPEG field named `image` and the header `X-Demo-Token`. `AI_MODE=mock` needs no key and returns the frozen demo JSON.
+
+The current plan is `docs/three-developer-gemini-coach-plan.md`. Older plans in `docs/` are retired.
 
 ## Safety
 

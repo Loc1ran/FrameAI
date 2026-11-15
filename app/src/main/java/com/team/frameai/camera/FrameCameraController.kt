@@ -11,6 +11,7 @@ import androidx.camera.view.LifecycleCameraController
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.team.frameai.model.LiveGuide
+import com.team.frameai.model.LutIds
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -25,7 +26,8 @@ class FrameCameraController(context: Context) {
     @Volatile var detector: PrimaryFaceDetector? = null
     @Volatile var compositionGuide: CompositionGuide? = null
     @Volatile var previewView: androidx.camera.view.PreviewView? = null
-    @Volatile var onGuide: (LiveGuide) -> Unit = {}
+    @Volatile var onGuide: (LiveGuide, com.team.frameai.model.FaceBoxNormalized?) -> Unit = { _, _ -> }
+    @Volatile var suggestedLutId: String = LutIds.WARM_FILM
 
     init {
         lifecycleController.cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
@@ -97,12 +99,15 @@ class FrameCameraController(context: Context) {
         } else {
             null
         }
+        val scene = ImageSceneSampler.read(image, mapped)
+        if (scene != null) suggestedLutId = scene.lookId
         val guide = when {
             raw != null && mapped == null -> staticTargetGuide()
-            else -> compositionGuide?.suggest(mapped, null) ?: detectedGuide(mapped)
+            else -> compositionGuide?.suggest(mapped, null, scene) ?: detectedGuide(mapped)
         }
         val deliver = onGuide
-        mainHandler.post { deliver(guide) }
+        val area = mapped
+        mainHandler.post { deliver(guide, area) }
     }
 
     private fun detectedGuide(mapped: com.team.frameai.model.FaceBoxNormalized?): LiveGuide {
@@ -121,7 +126,7 @@ class FrameCameraController(context: Context) {
 
     private fun staticTargetGuide(): LiveGuide = LiveGuide(
         kind = "ALIGN_SUBJECT",
-        message = "Use the grid to place your subject",
+        message = "Use the grid to place any subject",
         targetX = TARGET_X,
         targetY = TARGET_Y,
         subjectX = null,
@@ -132,7 +137,7 @@ class FrameCameraController(context: Context) {
 
     private fun noFaceGuide(): LiveGuide = LiveGuide(
         kind = "NO_FACE",
-        message = "Use the grid to place your subject",
+        message = "Point at any subject. Use the grid to choose a placement.",
         targetX = TARGET_X,
         targetY = TARGET_Y,
         subjectX = null,

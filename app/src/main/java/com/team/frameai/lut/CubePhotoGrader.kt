@@ -5,16 +5,12 @@ import com.team.frameai.camera.PhotoGrader
 
 /**
  * Real .cube grade for the review screen. The original bitmap is not modified.
- * A missing or unreadable look throws. Callers must not present that failure as an edit.
+ * Unknown ids and malformed cubes throw. A failure is not returned as a copy of the original.
  */
 class CubePhotoGrader(
-    private val grade: (Bitmap, String, Float) -> Bitmap,
+    private val repository: BitmapLutRepository,
 ) : PhotoGrader {
-    constructor(repository: BitmapLutRepository) : this({ source, lutId, intensity ->
-        repository.apply(source, lutId, intensity)
-    })
-
     override fun apply(source: Bitmap, lutId: String, intensity: Float): Bitmap {
-        return grade(source, lutId, intensity)
+        return repository.apply(source, lutId, intensity)
     }
 }

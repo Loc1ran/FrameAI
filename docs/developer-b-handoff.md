@@ -21,31 +21,30 @@ The JVM tests compile `app/src/main/java` and skip Android-only files: `MainActi
 
 ### Guide
 
-`GuideEngine.suggest(faceBox, steady)` returns exactly one `LiveGuide`. `kind` and `source` are the contract strings.
+Follow `docs/three-developer-gemini-coach-plan.md`. Do not bring back the fixed upper-right circle or a paragraph tip.
 
-- Target `(0.67, 0.33)`. READY when the face center is within ±0.08 x and ±0.10 y. Otherwise ALIGN. Null is NO_FACE.
-- Messages match the frozen mocks. `source` is `offline_rules`.
-- Hints do not say "move left" or "move right".
-- `steady` is accepted and does not add a second tip.
-- `GuideSmoother` eases the box and emits about 4 times per second. A face appearing or disappearing is delivered immediately.
+`GuideEngine.suggest(faceBox, steady, scene)` returns one `LiveGuide`. `kind` stays `ALIGN_SUBJECT`, `READY`, or `NO_FACE`. `source` for this path stays `offline_rules`.
+
+- A person can sit on either third. Size and clipped edges are judged before placement.
+- No person is still a picture. A horizon, a brighter side, or an even frame each get their own guide.
+- The preview draws a dashed goal, a solid current frame, and an arrow. It does not print `message`.
+- `GuideSmoother` is not wired in `MainActivity`. Do not add "move left" or "move right" to any text that still exists in JSON.
 
 ### LUT
 
-The full downloaded library is in `app/src/main/assets/luts/`. `LutPack.looks` is the selectable list, loaded one file at a time.
+`LutPack.looks` is only Warm Film and Cool Cinema. The other `.cube` files stay in `app/src/main/assets/luts/` and are not loaded or offered. Several are camera-log conversions and must not be applied to a normal phone JPEG.
 
-- `warm_film` is the downloaded `Cinematic_04` look
-- `cool_cinema` is the downloaded `Cinematic_08` look
+- `warm_film` is the downloaded `cinematic_04.cube`
+- `cool_cinema` is the downloaded `cinematic_08.cube`
 - `identity_4.cube` is for the identity check and is not a user preset
+- Review strength is `LutPack.REVIEW_INTENSITY` (`0.85`). The repository default of `0.7` is not what the screen uses.
 
-The demo chips stay `warm_film` and `cool_cinema`. Shot review still may only suggest those or `none`. The other ids include camera-log and film-negative conversions. Those are available in the list, and they are a poor match for a normal phone JPEG.
+`CubePhotoGrader` calls `BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`. The LUT is resolved before the bitmap is read. Unknown ids throw `UnknownLutException`. Malformed cubes throw `CubeParseException`. Neither failure is turned into a copy of the original.
 
-`CubePhotoGrader` calls `BitmapLutRepository.fromAssets(assets).apply(bitmap, lutId, intensity)`. A failed grade returns a copy of the source.
-
-- Default intensity is `0.7`.
 - Returns a new bitmap. Does not modify or recycle the original.
 - Long edge above 1024 px is graded at 1024. Call this off the main thread.
-- Unknown ids throw `UnknownLutException`.
 - Warm Film and Cool Cinema are the SDR looks for a normal JPEG. This is a still-photo grade, not a live GPU preview.
+- At strength 0.85, neutral gray stays off the 0 and 255 rails, warm raises red over blue, and cool raises blue over red. Dark values stay dark and bright values stay bright.
 
 ### Offline coaching
 
@@ -60,7 +59,7 @@ The guide target is on the **displayed** preview, origin top-left, both axes 0..
 1. ML Kit returns an upright box when `InputImage.fromMediaImage(image, rotation)` is used. `MlKitPrimaryFaceDetector` converts that box back into the unrotated buffer before returning `RawFaceBox`.
 2. `AnalysisCoordinateMapper` maps the buffer box into the `PreviewView` with CameraX `ImageProxyTransformFactory`. A failed mapping with a raw face keeps the static target.
 
-If the on-phone marker is obviously offset, stop drawing it and keep the static target plus the NO_FACE / ALIGN copy. Say that tracking is an MVP limit. Do not present a wrong box as accurate.
+If the on-phone marker is obviously offset, stop drawing the solid frame and keep the dashed goal. Do not present a wrong box as accurate.
 
 ## Tests
 
@@ -80,22 +79,13 @@ py -3 -m pytest
 
 ## Optional server
 
-`GET /health` → `{"status":"ok","aiMode":"mock"}`
+`GET /health` → `{"status":"ok","aiMode":"mock","geminiConfigured":false}`
 
-`POST /v1/shot-review` multipart field `image` plus header `X-Demo-Token`.
+`POST /v1/shot-review` and `POST /v1/live-coach` take a multipart field `image` plus header `X-Demo-Token`.
 
-- `AI_MODE=mock` returns `contracts/shot-review.mock.json` with `source=demo_mock`.
-- `AI_MODE=gemini` calls Gemini only when `GEMINI_API_KEY` is set on the server. One request at a time. Timeout is about 12 seconds.
-- Missing key or any other mode returns 503. The app should show `OfflineCoach`, not a fake Gemini success.
+- `AI_MODE=mock` returns the frozen mock JSON with `source=demo_mock`.
+- `AI_MODE=gemini` calls Gemini when `GEMINI_API_KEY` is set, or when Application Default Credentials and `GOOGLE_CLOUD_PROJECT` are set. One request at a time. Timeout is about 12 seconds. The default model is `gemini-3.5-flash-lite` in location `global`.
+- Missing credentials or any other mode returns 503. The app should show the offline coach, not a fake Gemini success.
 - 401 bad token, 400 not a JPEG, 413 over 2 MB, 429 already busy, 502 provider failure. The response body does not include the key, the image, or the raw provider error.
 
-Do not put `GEMINI_API_KEY`, `DEMO_TOKEN`, or a service-account JSON in the app or in git. Cloud Run deploy stays manual until the offline camera path is already working:
-
-```
-gcloud run deploy frameai-coach --source . --region us-central1 \
-  --max-instances 1 --min-instances 0 --cpu 1 --memory 512Mi \
-  --set-env-vars AI_MODE=gemini,MODEL_ID=gemini-2.5-flash \
-  --set-secrets GEMINI_API_KEY=frameai-gemini-key:latest,DEMO_TOKEN=frameai-demo-token:latest
-```
-
-Confirm the project, billing, and whether unauthenticated access is actually required before answering the deploy prompts.
+Do not put `GEMINI_API_KEY`, `DEMO_TOKEN`, or a service-account JSON in the app or in git. Do not deploy Cloud Run. Do not enable pay-as-you-go. The live JPEG is the current camera frame, not a sample of a wished-for photo.
