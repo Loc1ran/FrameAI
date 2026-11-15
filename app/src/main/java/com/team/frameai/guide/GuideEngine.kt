@@ -24,6 +24,7 @@ class GuideEngine(
         val issue = areaIssue(faceBox, target)
         val message = messageFor(issue, scene)
         val ready = issue == Issue.READY
+        val zoom = zoomFor(issue, faceBox)
         return LiveGuide(
             kind = if (ready) KIND_READY else KIND_ALIGN,
             message = message,
@@ -33,6 +34,9 @@ class GuideEngine(
             subjectY = faceBox.centerY.toDouble(),
             isReady = ready,
             source = AdviceSource.OFFLINE_RULES.wire,
+            referenceId = referenceFor(target.first),
+            zoom = zoom.first,
+            targetZoomRatio = zoom.second,
         )
     }
 
@@ -40,7 +44,6 @@ class GuideEngine(
         if (scene == null) return emptyFrame()
         val horizon = scene.horizonY
         if (scene.hasHorizon() && horizon != null) return horizonFrame(scene, horizon)
-        if (scene.hasSideBias()) return openSubject(scene)
         return readyScene(scene, OPEN_READY)
     }
 
@@ -74,20 +77,6 @@ class GuideEngine(
             subjectX = null,
             subjectY = horizon.toDouble(),
             isReady = ready,
-            source = AdviceSource.OFFLINE_RULES.wire,
-        )
-    }
-
-    private fun openSubject(scene: SceneRead): LiveGuide {
-        val targetX = if (scene.leftLuma > scene.rightLuma) THIRD_HI else THIRD_LO
-        return LiveGuide(
-            kind = KIND_ALIGN,
-            message = PLACE_ANY_MESSAGE,
-            targetX = targetX.toDouble(),
-            targetY = 0.5,
-            subjectX = null,
-            subjectY = null,
-            isReady = false,
             source = AdviceSource.OFFLINE_RULES.wire,
         )
     }
@@ -159,6 +148,31 @@ class GuideEngine(
         return face.width >= MIN_AREA_EDGE && face.height >= MIN_AREA_EDGE
     }
 
+    /**
+     * Clipped and oversized faces zoom out. A small face zooms in.
+     * A face that only needs to sit on a third holds the lens.
+     * Ratio is absolute, 1..8, assuming the preview is currently 1x.
+     */
+    private fun zoomFor(issue: Issue, face: FaceBoxNormalized): Pair<String, Double> {
+        return when (issue) {
+            Issue.SMALL -> ZOOM_IN to zoomInRatio(face)
+            Issue.LARGE, Issue.EDGE -> ZOOM_OUT to WIDEST_ZOOM
+            Issue.PLACE, Issue.READY -> ZOOM_HOLD to WIDEST_ZOOM
+        }
+    }
+
+    private fun zoomInRatio(face: FaceBoxNormalized): Double {
+        val height = face.height.coerceAtLeast(MIN_AREA_EDGE)
+        val width = face.width.coerceAtLeast(MIN_AREA_EDGE)
+        val byHeight = IDEAL_FACE_HEIGHT / height
+        val byWidth = IDEAL_FACE_WIDTH / width
+        return maxOf(byHeight, byWidth).toDouble().coerceIn(WIDEST_ZOOM, MAX_ZOOM)
+    }
+
+    private fun referenceFor(targetX: Float): String {
+        return if (targetX >= 0.5f) PORTRAIT_SPACE_LEFT else PORTRAIT_SPACE_RIGHT
+    }
+
     private enum class Issue { EDGE, SMALL, LARGE, PLACE, READY }
 
     companion object {
@@ -169,6 +183,22 @@ class GuideEngine(
 
         const val THIRD_LO = 0.33f
         const val THIRD_HI = 0.67f
+
+        /** Face near the right third, open space on the left. */
+        const val PORTRAIT_SPACE_LEFT = "portrait_space_left"
+
+        /** Face near the left third, open space on the right. */
+        const val PORTRAIT_SPACE_RIGHT = "portrait_space_right"
+
+        const val ZOOM_IN = "in"
+        const val ZOOM_OUT = "out"
+        const val ZOOM_HOLD = "hold"
+
+        const val IDEAL_FACE_WIDTH = 0.32f
+        const val IDEAL_FACE_HEIGHT = 0.40f
+
+        private const val WIDEST_ZOOM = 1.0
+        private const val MAX_ZOOM = 8.0
         private const val EDGE = 0.02f
         private const val MIN_AREA_EDGE = 0.04f
         private const val MIN_WIDTH = 0.14f
