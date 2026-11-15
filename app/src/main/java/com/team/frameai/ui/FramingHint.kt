@@ -9,16 +9,11 @@ import com.team.frameai.model.LiveGuide
 
 data class FramingHint(val title: String, val detail: String, val symbol: String, val aligned: Boolean = false)
 
-/**
- * The suggestion stays on the move in [instruction]. A reply from an older move is not shown.
- * A model sentence is shown only when it starts with that same instruction.
- */
-internal fun matchingSuggestion(instruction: String, message: String?, sentFor: String?): String {
-    val move = instruction.trim()
-    if (move.isEmpty()) return message?.trim().orEmpty()
-    val reply = message?.trim().orEmpty()
-    if (sentFor?.trim() != move || reply.isEmpty()) return move
-    return if (reply.startsWith(move, ignoreCase = true)) reply else move
+/** One optional look name. The line never repeats a camera move. */
+internal fun coachingLookLine(name: String?): String? {
+    val look = name?.trim().orEmpty()
+    if (look.isEmpty()) return null
+    return "Suggested look · $look"
 }
 
 /**
@@ -34,8 +29,12 @@ fun framingHint(guide: LiveGuide?, area: FaceBoxNormalized? = null): FramingHint
     }
     return FramingHint(
         title = guide.message,
-        detail = detailFor(guide),
-        symbol = symbolFor(guide, area),
+        detail = guide.detail?.takeIf { it.isNotBlank() } ?: detailFor(guide),
+        symbol = when {
+            guide.isReady -> "✓"
+            !guide.cueSymbol.isNullOrBlank() -> guide.cueSymbol
+            else -> symbolFor(guide, area)
+        },
         aligned = guide.isReady,
     )
 }

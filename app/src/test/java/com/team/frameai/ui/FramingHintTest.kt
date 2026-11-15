@@ -29,6 +29,20 @@ class FramingHintTest {
         assertEquals(CoachAction.MOVE_RIGHT, framingHint(center).title)
     }
 
+    @Test fun aViewpointCueUsesItsOwnDetailAndSymbol() {
+        val hint = framingHint(
+            guide(0.5, 0.33, 0.5f, 0.33f, "Take one step to your right.").copy(
+                detail = "That moves the pole out from behind their head.",
+                hideGoal = true,
+                cueSymbol = "⇄",
+            ),
+        )
+        assertEquals("Take one step to your right.", hint.title)
+        assertEquals("That moves the pole out from behind their head.", hint.detail)
+        assertEquals("⇄", hint.symbol)
+        assertFalse(hint.aligned)
+    }
+
     @Test fun clippedSubjectUsesTheGuideMessage() {
         val edge = FaceBoxNormalized(0.12f, 0.5f, 0f, 0.3f, 0.24f, 0.7f)
         val hint = framingHint(guide(0.33, 0.33, 0.12f, 0.5f, GuideEngine.BREATHING_CUE), edge)

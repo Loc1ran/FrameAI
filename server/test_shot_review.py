@@ -4,7 +4,7 @@ from jsonschema.exceptions import ValidationError
 
 import main
 from validate import (
-    align_live_coach,
+    accept_director,
     load_json,
     normalize_gemini_payload,
     normalize_live_coach,
@@ -188,14 +188,69 @@ def test_live_coach_without_key_is_not_a_fake_success(client, monkeypatch):
     assert "message" not in response.json()
 
 
-def test_live_coach_message_stays_on_the_guide_instruction():
+def test_live_coach_keeps_a_different_artistic_direction():
     payload = load_json("live-coach.mock.json")
-    instruction = "Step closer."
-    contradicted = align_live_coach(dict(payload, message="Tilt the phone up."), instruction)
-    assert contradicted["message"] == instruction
-    explained = align_live_coach(dict(payload, message="Step closer. The subject is small."), instruction)
-    assert explained["message"] == "Step closer. The subject is small."
-    validate_live_coach(contradicted)
+    payload.update({
+        "message": "Take one step to your right to clear the pole.",
+        "photographyStyle": "street",
+        "compositionPreset": "centered",
+        "primaryIssue": "distracting_background",
+        "actionType": "step_right",
+        "actionReason": "A pole lines up behind the subject.",
+        "confidence": 0.9,
+        "source": "gemini",
+    })
+    cleaned = accept_director(normalize_live_coach(payload), "Move slightly left.")
+    assert cleaned["message"] == "Take one step to your right to clear the pole."
+    assert "Move slightly left" not in cleaned["message"]
+    assert cleaned["actionType"] == "step_right"
+    assert cleaned["compositionPreset"] == "none"
+    assert cleaned["confidence"] == 0.9
+    validate_live_coach(cleaned)
+
+
+def test_invalid_director_action_does_not_steer():
+    payload = load_json("live-coach.mock.json")
+    payload["actionType"] = "fly"
+    payload["confidence"] = 0.99
+    payload["compositionPreset"] = "centered"
+    cleaned = normalize_live_coach(payload)
+    assert cleaned["actionType"] == "hold"
+    assert cleaned["compositionPreset"] == "none"
+    assert cleaned["confidence"] == 0
+    validate_live_coach(cleaned)
+
+
+def test_low_confidence_direction_is_not_replaced_by_the_phone_cue():
+    payload = load_json("live-coach.mock.json")
+    payload.update({
+        "message": "Turn toward the window for softer light.",
+        "photographyStyle": "portrait",
+        "compositionPreset": "none",
+        "primaryIssue": "backlit",
+        "actionType": "change_lighting",
+        "actionReason": "The face is darker than the bright background.",
+        "confidence": 0.42,
+        "source": "gemini",
+    })
+    cleaned = accept_director(normalize_live_coach(payload), "Move slightly left.")
+    assert cleaned["message"] == "Turn toward the window for softer light."
+    assert cleaned["confidence"] == 0.42
+    assert cleaned["actionType"] == "change_lighting"
+    validate_live_coach(cleaned)
+
+
+def test_coach_prompt_lets_the_model_choose_the_action():
+    from gemini_client import build_coach_prompt
+
+    prompt = build_coach_prompt("subject", instruction="Move slightly left.", style="cinematic")
+    assert "must start with this exact instruction" not in prompt
+    assert "Do not recommend a different move" not in prompt
+    assert "cinematic" in prompt
+    assert "Move slightly left." in prompt
+    scene = build_coach_prompt("scene", style="landscape")
+    assert "landscape" in scene
+    assert "must start with this exact instruction" not in scene
 
 
 def test_shot_review_keeps_ten_phone_looks():

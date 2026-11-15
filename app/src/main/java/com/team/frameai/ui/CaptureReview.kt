@@ -5,7 +5,7 @@ import com.team.frameai.model.ShotReview
 import com.team.frameai.review.OfflineCoach
 
 internal fun reviewAtCapture(guide: LiveGuide?, fallback: ShotReview): ShotReview {
-    val realGuide = guide?.takeIf { it.source == "offline_rules" }
+    val realGuide = guide?.takeIf { it.source == "offline_rules" || it.source == "gemini" }
     val usable = when (realGuide?.kind) {
         "NO_FACE" -> realGuide.subjectX == null && realGuide.subjectY == null && !realGuide.isReady
         "ALIGN_SUBJECT", "READY" ->

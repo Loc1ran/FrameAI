@@ -40,7 +40,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.team.frameai.guide.CompositionMode
+import com.team.frameai.guide.DirectorSession
 import com.team.frameai.guide.FrameRatio
+import com.team.frameai.guide.LutAdvice
+import com.team.frameai.guide.PhotographyStyle
 import com.team.frameai.guide.SceneComposition
 import com.team.frameai.guide.LightingMap
 import com.team.frameai.guide.SceneGeometry
@@ -59,6 +62,7 @@ fun CameraScreen(
     compositionGuide: CompositionGuide?,
     onCaptured: (File, String, String, LiveGuide?) -> Unit,
     orientationDegrees: Int = 0,
+    director: DirectorSession = DirectorSession(),
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -82,10 +86,13 @@ fun CameraScreen(
     var aiFailed by remember { mutableStateOf(false) }
     var aiReplyAt by remember { mutableLongStateOf(0L) }
     var aiReply by remember { mutableStateOf<LiveCoach?>(null) }
-    var aiForInstruction by remember { mutableStateOf<String?>(null) }
     var aiStatus by remember { mutableStateOf("Waiting for a scene suggestion…") }
     var ratioName by rememberSaveable { mutableStateOf(FrameRatio.FOUR_THREE.name) }
     val frameRatio = FrameRatio.entries.firstOrNull { it.name == ratioName } ?: FrameRatio.FULL
+    var styleName by rememberSaveable { mutableStateOf(PhotographyStyle.AUTO.wire) }
+    val photoStyle = PhotographyStyle.fromWire(styleName)
+    var lookName by remember { mutableStateOf<String?>(null) }
+    val coachGate = remember { CoachGate() }
     var resumed by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val controller = remember { FrameCameraController(context.applicationContext) }
@@ -107,6 +114,8 @@ fun CameraScreen(
             } else if (event == Lifecycle.Event.ON_PAUSE) {
                 resumed = false
                 aiReply = null
+                director.bump()
+                coachGate.lastKey = ""
                 modeGeneration++
                 area = null
                 live = null
@@ -135,22 +144,39 @@ fun CameraScreen(
         controller.onFrameJpeg = { jpeg ->
             val requestMode = mode
             val requestGeneration = modeGeneration
-            val requestInstruction = if (requestMode == CompositionMode.SUBJECT) framingHint(live, area).title else ""
-            scope.launch {
+            val requestStyle = PhotographyStyle.fromWire(styleName).wire
+            val requestKey = "$requestMode|$requestStyle|${coachGate.bucket}|${coachGate.aligned}"
+            val fresh = aiReply != null && SystemClock.elapsedRealtime() - aiReplyAt < 8_000
+            if (requestKey == coachGate.lastKey && fresh) {
+                controller.finishFrameSend()
+            } else scope.launch {
                 try {
                     val reply = client.coach(
                         jpeg,
                         scene = requestMode == CompositionMode.SCENE,
-                        instruction = requestInstruction,
+                        instruction = "",
+                        style = requestStyle,
                     )
                     if (cloudOn && resumed && mode == requestMode && modeGeneration == requestGeneration) {
                         aiReply = reply
-                        aiForInstruction = requestInstruction
                         aiFailed = reply == null
                         aiReplyAt = SystemClock.elapsedRealtime()
-                        aiStatus = if (reply == null) "AI unavailable. The guide above is the move to follow." else ""
-                        if (reply?.suggestedLutId in com.team.frameai.lut.LutPack.ids) {
-                            controller.suggestedLutId = reply!!.suggestedLutId
+                        aiStatus = if (reply == null) {
+                            "AI unavailable. The on-device guide stays in place."
+                        } else {
+                            ""
+                        }
+                        if (reply != null) {
+                            coachGate.lastKey = requestKey
+                            if (requestMode == CompositionMode.SUBJECT) {
+                                director.offer(reply, SystemClock.elapsedRealtime())
+                            }
+                            val look = LutAdvice.accept(reply.suggestedLutId, reply.sceneType)
+                            if (look != null) {
+                                controller.suggestedLutId = look
+                                controller.sceneLutAllowed = false
+                                lookName = LutAdvice.displayName(look)
+                            }
                         }
                     }
                 } finally { controller.finishFrameSend() }
@@ -192,7 +218,15 @@ fun CameraScreen(
         CompositionMode.SUBJECT ->
             trackingError?.let { FramingHint("Tracking unavailable", it, "!") } ?: framingHint(live, area)
     }
+    coachGate.aligned = hint.aligned
+    coachGate.bucket = area?.let { "${(it.anchorX * 8f).toInt()}:${(it.anchorY * 8f).toInt()}" } ?: "none"
     var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(hint.aligned, cloudOn) {
+        if (hint.aligned && cloudOn) {
+            coachGate.lastKey = ""
+            controller.requestAnalysisSoon()
+        }
+    }
     LaunchedEffect(hint.aligned, guided, mode) {
         settled = false
         if (hint.aligned && guided) { delay(600); settled = true }
@@ -234,6 +268,12 @@ fun CameraScreen(
                                 if (size.width <= 0f || size.height <= 0f) return@detectTapGestures
                                 tapMark = offset
                                 controller.selectSubjectAt(offset.x / size.width, offset.y / size.height)
+                                director.bump()
+                                coachGate.lastKey = ""
+                                modeGeneration++
+                                aiReply = null
+                                aiFailed = false
+                                controller.requestAnalysisSoon()
                             }
                         },
                     )
@@ -265,7 +305,7 @@ fun CameraScreen(
             CaptureDeck(
                 mode = mode, guided = guided, picked = picked, hint = hint,
                 orientationDegrees = orientationDegrees,
-                cloudOn = cloudOn, aiReply = aiReply, aiForInstruction = aiForInstruction,
+                cloudOn = cloudOn, lookName = lookName,
                 aiFailed = aiFailed, aiStatus = aiStatus, error = error,
                 capturing = capturing, settled = settled,
                 zoomOutEnabled = !capturing && controller.canApplyZoom(0.8f),
@@ -341,14 +381,38 @@ fun CameraScreen(
                     modeGeneration++
                     aiFailed = false
                     aiReply = null
+                    director.bump()
+                    coachGate.lastKey = ""
                 },
                 onRatio = { if (!capturing) ratioName = it.name },
                 onGuide = { guided = !guided },
-                onCloud = { if (!capturing) { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ } },
+                onCloud = {
+                    if (capturing) return@CameraToolbar
+                    val enable = !cloudOn
+                    cloudOn = enable
+                    aiReply = null
+                    aiFailed = false
+                    modeGeneration++
+                    director.bump()
+                    coachGate.lastKey = ""
+                    lookName = null
+                    controller.sceneLutAllowed = true
+                    if (enable) controller.requestAnalysisSoon()
+                },
                 showLightingMap = showLightingMap,
                 onLightingMap = { showLightingMap = !showLightingMap },
             )
             if (granted) {
+                StyleRow(photoStyle, orientationDegrees) { choice ->
+                    if (capturing || choice.wire == styleName) return@StyleRow
+                    styleName = choice.wire
+                    director.bump()
+                    coachGate.lastKey = ""
+                    aiReply = null
+                    aiFailed = false
+                    modeGeneration++
+                    controller.requestAnalysisSoon()
+                }
                 preview(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp))
                 deck(Modifier.fillMaxWidth().height(deckHeight)
                     .padding(horizontal = 20.dp, vertical = 8.dp))
@@ -469,8 +533,7 @@ private fun CaptureDeck(
     hint: FramingHint,
     orientationDegrees: Int,
     cloudOn: Boolean,
-    aiReply: LiveCoach?,
-    aiForInstruction: String?,
+    lookName: String?,
     aiFailed: Boolean,
     aiStatus: String,
     error: String?,
@@ -508,19 +571,15 @@ private fun CaptureDeck(
         if (cloudOn) {
             Text(
                 if (mode == CompositionMode.ACTION) "AI BEST SHOT · compares the burst"
-                else "AI SUGGESTION · same move as the guide",
+                else "AI DIRECTOR",
                 color = FrameGold,
                 fontSize = 9.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )
             if (mode == CompositionMode.SUBJECT) {
-                Text(
-                    matchingSuggestion(hint.title, aiReply?.message, aiForInstruction),
-                    color = FrameMuted,
-                    fontSize = 11.sp,
-                    lineHeight = 14.sp,
-                    maxLines = 2,
-                )
+                coachingLookLine(lookName)?.let { line ->
+                    Text(line, color = FrameMuted, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 1)
+                }
             }
             if (mode == CompositionMode.ACTION) {
                 Text("After capture, AI checks timing, sharpness, clipping, and composition.",
@@ -546,6 +605,42 @@ private fun CaptureDeck(
         }
 
     }
+}
+
+@Composable
+private fun StyleRow(
+    style: PhotographyStyle,
+    orientationDegrees: Int,
+    onStyle: (PhotographyStyle) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 8.dp).testTag("styleSelector"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PhotographyStyle.entries.forEach { choice ->
+            val selected = choice == style
+            TextButton(
+                onClick = { onStyle(choice) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+                CameraLabel(orientationDegrees, Modifier.fillMaxSize()) {
+                    Text(
+                        choice.shortLabel,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) FrameGold else FrameMuted,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private class CoachGate {
+    var lastKey: String = ""
+    var aligned: Boolean = false
+    var bucket: String = "none"
 }
 
 private fun modeLabel(mode: CompositionMode): String = when (mode) {

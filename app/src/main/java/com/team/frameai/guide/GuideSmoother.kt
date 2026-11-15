@@ -15,6 +15,8 @@ class GuideSmoother(
     private val minIntervalMs: Long = 250L,
     private val smoothing: Float = 0.45f,
     private val stabilizer: CompositionStabilizer = CompositionStabilizer(),
+    private val director: DirectorSession? = null,
+    private val planner: DirectorPlanner = DirectorPlanner(),
 ) {
     private var smoothed: FaceBoxNormalized? = null
     private var lastEmitMs: Long = Long.MIN_VALUE
@@ -30,7 +32,8 @@ class GuideSmoother(
         val blended = blend(face)
         if (blended == null) {
             stabilizer.clear()
-            return publish(applyLighting(engine.advise(null, steady, scene), scene), nowMs)
+            val base = applyLighting(engine.advise(null, steady, scene), scene)
+            return publish(direct(base, null, nowMs, scene), nowMs)
         }
         val natural = engine.advise(blended, steady, scene)
         val stable = stabilizer.choose(
@@ -54,7 +57,12 @@ class GuideSmoother(
             val kept = lastGuide
             if (kept != null && GeometryCoach.isCue(kept.message)) return kept
         }
-        return publish(applyLighting(framing, scene), nowMs)
+        return publish(direct(applyLighting(framing, scene), blended, nowMs, scene), nowMs)
+    }
+
+    private fun direct(framing: Framing, face: FaceBoxNormalized?, nowMs: Long, scene: SceneRead?): Framing {
+        val session = director ?: return framing
+        return planner.merge(framing, session.current(nowMs), nowMs, engine, face, scene)
     }
 
     private fun applyLighting(framing: Framing, scene: SceneRead?): Framing {
