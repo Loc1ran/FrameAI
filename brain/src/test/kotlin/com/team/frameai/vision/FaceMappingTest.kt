@@ -77,6 +77,34 @@ class FaceMappingTest {
     }
 
     @Test
+    fun eyeAnchorRoundTripsWithTheSameRotationAsTheBox() {
+        val eyeX = 0.62f
+        val eyeY = 0.31f
+        val (sensorX, sensorY) = FaceBoxMath.uprightPointToSensor(eyeX, eyeY, 90)
+        val (uprightX, uprightY) = FaceBoxMath.sensorPointToUpright(sensorX, sensorY, 90)
+        assertEquals(eyeX, uprightX, 0.0001f)
+        assertEquals(eyeY, uprightY, 0.0001f)
+        val box = FaceBoxNormalized.fromEdges(0.50f, 0.20f, 0.74f, 0.48f)
+        val turned = FaceBoxMath.sensorBoxToUpright(FaceBoxMath.uprightBoxToSensor(box, 270), 270)
+        assertEquals(box.centerX, turned.centerX, 0.0001f)
+        assertEquals(box.centerY, turned.centerY, 0.0001f)
+    }
+
+    @Test
+    fun fillCenterCropAndMirrorMoveAnAnchorWithThePreview() {
+        val wide = PreviewMapping(200, 100, 100, 100)
+        val (anchorX, anchorY) = PreviewCoordinateMapper.mapPoint(0.80f, 0.40f, wide)
+        val (mirroredX, mirroredY) = PreviewCoordinateMapper.mapPoint(0.80f, 0.40f, wide.copy(mirrorX = true))
+        assertEquals(0.40f, anchorY, 0.0001f)
+        assertEquals(anchorY, mirroredY, 0.0001f)
+        assertEquals(1f - anchorX, mirroredX, 0.0001f)
+        val rear = PreviewCoordinateMapper.mapPoint(0.25f, 0.40f, wide.copy(mirrorX = false))
+        assertTrue(rear.first < 0.5f)
+        val front = PreviewCoordinateMapper.mapPoint(0.25f, 0.40f, wide.copy(mirrorX = true))
+        assertTrue(front.first > 0.5f)
+    }
+
+    @Test
     fun uprightBoxRoundTripsToTheSensor() {
         val sensor = FaceBoxNormalized.fromEdges(0.2f, 0.3f, 0.5f, 0.7f)
         val upright = FaceBoxMath.sensorBoxToUpright(sensor, 90)

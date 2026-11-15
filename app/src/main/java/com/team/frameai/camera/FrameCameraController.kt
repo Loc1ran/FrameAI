@@ -15,6 +15,9 @@ import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.team.frameai.guide.GeometryMeasure
+import com.team.frameai.guide.SceneGeometry
+import com.team.frameai.guide.ShapeOverlap
 import com.team.frameai.guide.ZoomLens
 import com.team.frameai.model.LiveGuide
 import com.team.frameai.model.LutIds
@@ -37,7 +40,7 @@ class FrameCameraController(context: Context) {
     @Volatile var detector: PrimaryFaceDetector? = null
     @Volatile var compositionGuide: CompositionGuide? = null
     @Volatile var previewView: androidx.camera.view.PreviewView? = null
-    @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, String?) -> Unit = { _, _, _ -> }
+    @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, SceneGeometry?, String?) -> Unit = { _, _, _, _ -> }
     @Volatile var onFrameJpeg: ((ByteArray) -> Unit)? = null
     @Volatile var captureFrames: Boolean = false
     @Volatile var sceneLutAllowed: Boolean = true
@@ -79,8 +82,12 @@ class FrameCameraController(context: Context) {
             } catch (error: Exception) {
                 Log.w("FrameAI", "Frame analysis unavailable", error)
                 mainHandler.post {
-                    if (running && token == generation) onGuide(staticTargetGuide(), null,
-                        "Object detection is unavailable. Reopen the camera to retry; you can still take a photo.")
+                    if (running && token == generation) onGuide(
+                        staticTargetGuide(),
+                        null,
+                        null,
+                        "Object detection is unavailable. Reopen the camera to retry; you can still take a photo.",
+                    )
                 }
             } finally {
                 image.close()
@@ -116,19 +123,25 @@ class FrameCameraController(context: Context) {
         if (!running) return
         val token = generation
         val frameAt = SystemClock.elapsedRealtime()
-        val raw = if (subjectTracker.isLocked) subjectTracker.track(image)
-            else detector?.detectPrimaryFace(image) ?: subjectTracker.track(image)
+        val face = detector?.detectPrimaryFace(image)
+        val tracked = if (face == null) subjectTracker.inspect(image) else null
+        val raw = face ?: tracked?.primary
+        val overlap = ShapeOverlap.strongest(tracked?.boxes.orEmpty())
+        val measured = LumaGridSampler.sample(image)?.let { samples ->
+            GeometryMeasure.measure(samples).forViewer(frontCamera())
+        }
         // ML Kit's adapter already returns unrotated buffer coordinates.
         val source = ImageProxyTransformFactory().getOutputTransform(image)
         val width = image.width
         val height = image.height
+        val rotation = image.imageInfo.rotationDegrees
         val upright = raw?.let {
             FaceBoxMath.sensorBoxToUpright(
                 FaceBoxNormalized(it.centerX, it.centerY, it.left, it.top, it.right, it.bottom),
                 image.imageInfo.rotationDegrees,
             )
         }
-        val scene = ImageSceneSampler.read(image, upright)
+        val scene = ImageSceneSampler.read(image, upright)?.copy(geometry = measured, shapeOverlap = overlap)
         if (scene != null && sceneLutAllowed) suggestedLutId = scene.lookId
         mainHandler.post {
             if (!running || token != generation) return@post
@@ -137,16 +150,46 @@ class FrameCameraController(context: Context) {
                 val target = preview?.outputTransform
                 val mapped = if (raw != null && preview != null && target != null &&
                     SystemClock.elapsedRealtime() - frameAt < 1_500L) {
-                    AnalysisCoordinateMapper.map(source, target, width, height, preview.width, preview.height, raw)
+                    AnalysisCoordinateMapper.map(
+                        source,
+                        target,
+                        width,
+                        height,
+                        preview.width,
+                        preview.height,
+                        raw,
+                        mirroredPreview = frontCamera(),
+                    )
                 } else null
                 val guide = when {
                     raw != null && mapped == null -> staticTargetGuide()
                     else -> compositionGuide?.suggest(mapped, null, scene) ?: detectedGuide(mapped)
                 }
-                onGuide(guide, mapped, null)
+                val lines = scene?.geometry?.let { geometry ->
+                    if (preview != null && target != null) {
+                        AnalysisCoordinateMapper.mapGeometry(
+                            source,
+                            target,
+                            width,
+                            height,
+                            preview.width,
+                            preview.height,
+                            geometry,
+                            rotation,
+                        )
+                    } else {
+                        geometry.copy(detected = null, leveled = null)
+                    }
+                }
+                onGuide(guide, mapped, lines, null)
             } catch (error: Exception) {
                 Log.w("FrameAI", "Preview mapping unavailable", error)
-                onGuide(staticTargetGuide(), null, "The framing guide could not align with the preview. Reopen the camera to retry.")
+                onGuide(
+                    staticTargetGuide(),
+                    null,
+                    null,
+                    "The framing guide could not align with the preview. Reopen the camera to retry.",
+                )
             }
         }
         maybeSendFrame(image)
@@ -170,6 +213,11 @@ class FrameCameraController(context: Context) {
         } catch (_: Exception) {
             // The lens is not ready yet. Another tap can try again.
         }
+    }
+
+    private fun frontCamera(): Boolean {
+        return lifecycleController.cameraSelector.lensFacing ==
+            androidx.camera.core.CameraSelector.LENS_FACING_FRONT
     }
 
     private fun maybeSendFrame(image: androidx.camera.core.ImageProxy) {

@@ -35,6 +35,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.team.frameai.guide.CompositionMode
 import com.team.frameai.guide.SceneComposition
+import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.BuildConfig
 import com.team.frameai.camera.*
 import com.team.frameai.model.FaceBoxNormalized
@@ -58,6 +59,8 @@ fun CameraScreen(
     var modeGeneration by remember { mutableIntStateOf(0) }
     var guided by rememberSaveable { mutableStateOf(true) }
     var area by remember { mutableStateOf<FaceBoxNormalized?>(null) }
+    var live by remember { mutableStateOf<LiveGuide?>(null) }
+    var geometry by remember { mutableStateOf<SceneGeometry?>(null) }
     var trackingError by remember { mutableStateOf<String?>(null) }
     var areaAt by remember { mutableLongStateOf(0L) }
     var capturing by remember { mutableStateOf(false) }
@@ -79,6 +82,8 @@ fun CameraScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 resumed = true
                 area = null
+                live = null
+                geometry = null
                 trackingError = null
                 granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
             } else if (event == Lifecycle.Event.ON_PAUSE) {
@@ -86,6 +91,8 @@ fun CameraScreen(
                 aiReply = null
                 modeGeneration++
                 area = null
+                live = null
+                geometry = null
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -95,9 +102,11 @@ fun CameraScreen(
     DisposableEffect(lifecycleOwner, granted, faceDetector, compositionGuide) {
         controller.detector = faceDetector
         controller.compositionGuide = compositionGuide
-        controller.onGuide = { _, box, failure ->
+        controller.onGuide = { next, box, lines, failure ->
             if (resumed) {
+                live = next
                 area = box
+                geometry = lines
                 areaAt = SystemClock.elapsedRealtime()
                 trackingError = failure
             }
@@ -137,9 +146,11 @@ fun CameraScreen(
         if (aiReply != null) { delay(8_000); aiReply = null; aiStatus = "Waiting for a fresh suggestion…" }
     }
     val sceneAdvice = SceneComposition.suggest(aiReply, cloudOn, client.enabled, aiFailed)
-    val hint = if (mode == CompositionMode.SCENE)
+    val hint = if (mode == CompositionMode.SCENE) {
         FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
-        else trackingError?.let { FramingHint("Tracking unavailable", it, "!") } ?: framingHint(area)
+    } else {
+        trackingError?.let { FramingHint("Tracking unavailable", it, "!") } ?: framingHint(live, area)
+    }
     var settled by remember { mutableStateOf(false) }
     LaunchedEffect(hint.aligned, guided, mode) {
         settled = false
@@ -183,7 +194,7 @@ fun CameraScreen(
                     update = { controller.previewView = it },
                 )
                 if (mode == CompositionMode.SCENE) SceneOverlay(null, guided, settled)
-                else GuideOverlay(area, guided, settled)
+                else GuideOverlay(live, area, guided, geometry)
                 Text(
                     when {
                         !guided -> "FREE FRAME"
@@ -201,7 +212,7 @@ fun CameraScreen(
                 if (guided) {
                     Text(if (mode == CompositionMode.SCENE) "01   SUBJECT + SURROUNDINGS" else "01   FRAME YOUR SUBJECT", color = FrameMuted, fontSize = 10.sp, letterSpacing = 1.sp,
                         modifier = Modifier.padding(bottom = 8.dp))
-                    GuidanceCard(hint, settled, if (mode == CompositionMode.SCENE) "Scene framing ready" else "Position ready")
+                    GuidanceCard(hint)
                 } else {
                     Text("Frame it your way", color = FramePaper, fontSize = 20.sp)
                     Text("The guide is off. You can take a photo at any time.", color = FrameMuted, fontSize = 12.sp)
@@ -226,14 +237,9 @@ fun CameraScreen(
                                 error = null
                                 val stamp = PhotoNames.timestamp()
                                 val file = ImageSaver.createOriginal(context, stamp)
-                                val captureArea = area.takeIf { mode == CompositionMode.SUBJECT && guided && SystemClock.elapsedRealtime() - areaAt < 1_500 }
-                                val captureGuide = captureArea?.let {
-                                    LiveGuide(
-                                        if (settled) "READY" else "ALIGN_SUBJECT", hint.title,
-                                        0.5, 0.5,
-                                        it.centerX.toDouble(), it.centerY.toDouble(), settled, "offline_rules",
-                                    )
-                                }
+                                val fresh = mode == CompositionMode.SUBJECT && guided &&
+                                    area != null && SystemClock.elapsedRealtime() - areaAt < 1_500
+                                val captureGuide = if (fresh) live else null
                                 controller.takePicture(file,
                                     onSaved = { capturing = false; onCaptured(file, stamp, controller.suggestedLutId, captureGuide) },
                                     onError = { capturing = false; file.delete(); error = it },
@@ -263,14 +269,14 @@ fun CameraScreen(
 }
 
 @Composable
-private fun GuidanceCard(hint: FramingHint, settled: Boolean, readyTitle: String = "Position ready") {
+private fun GuidanceCard(hint: FramingHint) {
     Row(Modifier.fillMaxWidth().background(FrameSurface, RoundedCornerShape(16.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(if (hint.aligned && !settled) "◎" else hint.symbol,
-            color = if (settled) FrameReady else FrameGold, fontSize = 32.sp,
+        Text(hint.symbol,
+            color = if (hint.aligned) FrameReady else FrameGold, fontSize = 32.sp,
             modifier = Modifier.width(44.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                if (settled) readyTitle else if (hint.aligned) "Hold this position…" else hint.title,
+                hint.title,
                 color = FramePaper, fontSize = 19.sp, fontWeight = FontWeight.SemiBold,
             )
             Text(hint.detail, color = FrameMuted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 4.dp))

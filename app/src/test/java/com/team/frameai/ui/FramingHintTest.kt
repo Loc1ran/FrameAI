@@ -1,33 +1,56 @@
 package com.team.frameai.ui
 
+import com.team.frameai.guide.CoachAction
+import com.team.frameai.guide.GuideEngine
 import com.team.frameai.model.FaceBoxNormalized
+import com.team.frameai.model.LiveGuide
 import org.junit.Assert.*
 import org.junit.Test
 
 class FramingHintTest {
-    private fun box(x: Float, y: Float) = FaceBoxNormalized(x, y, x - 0.08f, y - 0.08f, x + 0.08f, y + 0.08f)
-
     @Test fun noDetectionNeverInventsAReadySubject() {
         assertEquals("Find your subject", framingHint(null).title)
         assertFalse(framingHint(null).aligned)
     }
 
-    @Test fun directionsNamePhoneMotionOneAxisAtATime() {
-        assertEquals("Pan phone right", framingHint(box(0.8f, 0.5f)).title)
-        assertEquals("Pan phone left", framingHint(box(0.2f, 0.5f)).title)
-        assertEquals("Tilt phone down", framingHint(box(0.5f, 0.8f)).title)
-        assertEquals("Tilt phone up", framingHint(box(0.5f, 0.2f)).title)
+    @Test fun directionsFollowTheRecommendedTarget() {
+        assertEquals("→", framingHint(guide(0.33, 0.33, 0.80f, 0.50f, CoachAction.MOVE_RIGHT)).symbol)
+        assertEquals("←", framingHint(guide(0.67, 0.33, 0.20f, 0.50f, CoachAction.MOVE_LEFT)).symbol)
+        assertEquals("↓", framingHint(guide(0.67, 0.33, 0.67f, 0.80f, CoachAction.MOVE_DOWN)).symbol)
+        assertEquals("↑", framingHint(guide(0.67, 0.67, 0.67f, 0.20f, CoachAction.MOVE_UP)).symbol)
     }
 
-    @Test fun readinessUsesTheVisibleCenterTarget() {
-        assertTrue(framingHint(box(0.5f, 0.5f)).aligned)
-        assertFalse(framingHint(box(0.67f, 0.33f)).aligned)
-        assertFalse(framingHint(box(0.5f + TARGET_RADIUS + 0.001f, 0.5f)).aligned)
+    @Test fun readinessUsesTheGuideInsteadOfTheCenter() {
+        val onThird = guide(0.67, 0.33, 0.67f, 0.33f, GuideEngine.GREAT_CUE, ready = true)
+        assertTrue(framingHint(onThird).aligned)
+        assertEquals(GuideEngine.GREAT_CUE, framingHint(onThird).title)
+        val center = guide(0.33, 0.33, 0.50f, 0.50f, CoachAction.MOVE_RIGHT)
+        assertFalse(framingHint(center).aligned)
+        assertEquals(CoachAction.MOVE_RIGHT, framingHint(center).title)
     }
 
-    @Test fun clippedSubjectGetsRoomAdviceNotAnInventedDistance() {
+    @Test fun clippedSubjectUsesTheGuideMessage() {
         val edge = FaceBoxNormalized(0.12f, 0.5f, 0f, 0.3f, 0.24f, 0.7f)
-        assertEquals("Give your subject room", framingHint(edge).title)
-        assertFalse(framingHint(edge).aligned)
+        val hint = framingHint(guide(0.33, 0.33, 0.12f, 0.5f, GuideEngine.BREATHING_CUE), edge)
+        assertEquals(GuideEngine.BREATHING_CUE, hint.title)
+        assertFalse(hint.aligned)
     }
+
+    private fun guide(
+        targetX: Double,
+        targetY: Double,
+        subjectX: Float,
+        subjectY: Float,
+        message: String,
+        ready: Boolean = false,
+    ) = LiveGuide(
+        kind = if (ready) GuideEngine.KIND_READY else GuideEngine.KIND_ALIGN,
+        message = message,
+        targetX = targetX,
+        targetY = targetY,
+        subjectX = subjectX.toDouble(),
+        subjectY = subjectY.toDouble(),
+        isReady = ready,
+        source = "offline_rules",
+    )
 }

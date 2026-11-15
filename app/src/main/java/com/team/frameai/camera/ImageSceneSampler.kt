@@ -34,12 +34,13 @@ object ImageSceneSampler {
         val rowCount = IntArray(GRID)
         var warmthSum = 0f
         var warmthCount = 0
+        var faceSum = 0f
+        var faceCount = 0
 
         for (row in 0 until GRID) {
             for (col in 0 until GRID) {
                 val nx = (col + 0.5f) / GRID
                 val ny = (row + 0.5f) / GRID
-                if (face != null && inside(nx, ny, face)) continue
                 val (sx, sy) = FaceBoxMath.uprightPointToSensor(nx, ny, rotation)
                 val luma = sample(
                     y,
@@ -50,6 +51,11 @@ object ImageSceneSampler {
                     width,
                     height,
                 ) ?: continue
+                if (face != null && inside(nx, ny, face)) {
+                    faceSum += luma
+                    faceCount += 1
+                    continue
+                }
                 if (nx < 0.5f) {
                     leftSum += luma
                     leftCount += 1
@@ -89,6 +95,7 @@ object ImageSceneSampler {
             topLuma = if (topCount == 0) 0.5f else topSum / topCount,
             bottomLuma = if (bottomCount == 0) 0.5f else bottomSum / bottomCount,
             horizonY = horizonY(rowSum, rowCount),
+            subjectLuma = if (faceCount < 2) null else faceSum / faceCount,
         )
     }
 

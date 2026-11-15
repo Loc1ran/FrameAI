@@ -15,6 +15,8 @@ import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.model.RawFaceBox
 import com.team.frameai.vision.FaceBoxMath
 
+data class TrackedFrame(val primary: RawFaceBox?, val boxes: List<FrameRect>)
+
 /**
  * Follows one prominent object without switching to newly appearing faces.
  * The camera controller closes the image. This tracker does not.
@@ -29,14 +31,19 @@ class MlKitSubjectTracker(
     val isLocked: Boolean get() = subjectLock.isLocked(SystemClock.elapsedRealtime())
 
     @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
-    fun track(image: ImageProxy): RawFaceBox? {
-        if (closed) return null
-        val media = image.image ?: return null
-        return track(InputImage.fromMediaImage(media, image.imageInfo.rotationDegrees))
+    fun track(image: ImageProxy): RawFaceBox? = inspect(image).primary
+
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
+    fun inspect(image: ImageProxy): TrackedFrame {
+        if (closed) return TrackedFrame(null, emptyList())
+        val media = image.image ?: return TrackedFrame(null, emptyList())
+        return inspect(InputImage.fromMediaImage(media, image.imageInfo.rotationDegrees))
     }
 
-    internal fun track(input: InputImage): RawFaceBox? {
-        if (closed) return null
+    internal fun track(input: InputImage): RawFaceBox? = inspect(input).primary
+
+    internal fun inspect(input: InputImage): TrackedFrame {
+        if (closed) return TrackedFrame(null, emptyList())
         val rotation = input.rotationDegrees
         // Keep the camera buffer alive until ML Kit finishes; CameraX drops queued frames.
         val found = Tasks.await(detector.process(input))
@@ -48,16 +55,21 @@ class MlKitSubjectTracker(
                 box = FrameRect(upright.left, upright.top, upright.right, upright.bottom),
             )
         }
-        val chosen = subjectLock.choose(candidates, SystemClock.elapsedRealtime()) ?: return null
+        val boxes = candidates.map { it.box }
+        val chosen = subjectLock.choose(candidates, SystemClock.elapsedRealtime())
+            ?: return TrackedFrame(null, boxes)
         val upright = FaceBoxNormalized.fromEdges(chosen.box.left, chosen.box.top, chosen.box.right, chosen.box.bottom)
         val sensor = FaceBoxMath.uprightBoxToSensor(upright, rotation)
-        return RawFaceBox(
-            centerX = sensor.centerX,
-            centerY = sensor.centerY,
-            left = sensor.left,
-            top = sensor.top,
-            right = sensor.right,
-            bottom = sensor.bottom,
+        return TrackedFrame(
+            RawFaceBox(
+                centerX = sensor.centerX,
+                centerY = sensor.centerY,
+                left = sensor.left,
+                top = sensor.top,
+                right = sensor.right,
+                bottom = sensor.bottom,
+            ),
+            boxes,
         )
     }
 

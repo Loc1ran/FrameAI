@@ -8,6 +8,16 @@ data class FaceBoxNormalized(
     val top: Float,
     val right: Float,
     val bottom: Float,
+    /** Portrait point used for placement. Defaults to the box center when landmarks are absent. */
+    val anchorX: Float = centerX,
+    val anchorY: Float = centerY,
+    val anchorKind: AnchorKind = AnchorKind.BOX,
+    /**
+     * Approximate head yaw in the displayed preview, in degrees.
+     * Positive means the head is turned toward the viewer's right. Null means the detector did not supply a pose.
+     * This is not gaze.
+     */
+    val yawDegrees: Float? = null,
 ) {
     val width: Float get() = right - left
     val height: Float get() = bottom - top

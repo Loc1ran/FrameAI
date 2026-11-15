@@ -9,6 +9,11 @@ import kotlin.math.roundToInt
  * so the phone direction is opposite the gap from the subject to the dashed frame.
  */
 object CoachAction {
+    const val MOVE_LEFT = "Move slightly left."
+    const val MOVE_RIGHT = "Move slightly right."
+    const val MOVE_UP = "Move camera upward."
+    const val MOVE_DOWN = "Move camera downward."
+
     fun label(
         cue: FrameCue,
         zoomPossible: Boolean,
@@ -50,6 +55,28 @@ object CoachAction {
 
     fun move(subjectX: Float, subjectY: Float, goalX: Float, goalY: Float): String {
         return phrase("Move", subjectX - goalX, subjectY - goalY)
+    }
+
+    /**
+     * One camera-move sentence. The phone direction is opposite the on-screen gap
+     * from the subject anchor to the dashed frame, same sign as [move].
+     */
+    fun slightMove(subjectX: Float, subjectY: Float, goalX: Float, goalY: Float): String {
+        val horizontal = horizontalWord(subjectX - goalX)
+        val vertical = verticalWord(subjectY - goalY)
+        val choice = when {
+            horizontal == null -> vertical
+            vertical == null -> horizontal
+            abs(subjectY - goalY) > abs(subjectX - goalX) -> vertical
+            else -> horizontal
+        }
+        return when (choice) {
+            "left" -> MOVE_LEFT
+            "right" -> MOVE_RIGHT
+            "up" -> MOVE_UP
+            "down" -> MOVE_DOWN
+            else -> "Move toward the dashed frame."
+        }
     }
 
     fun tilt(horizonY: Float, goalY: Float): String {

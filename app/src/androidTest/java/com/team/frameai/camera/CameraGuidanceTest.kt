@@ -31,8 +31,9 @@ class CameraGuidanceTest {
             }
         }
         compose.onNodeWithText("CHOOSE SUBJECT PLACEMENT", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Center guide", substring = true).assertDoesNotExist()
         compose.waitUntil(20_000) {
-            compose.onAllNodesWithText("Position ready", substring = true).fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("SUBJECT TRACKED", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
     }
 }

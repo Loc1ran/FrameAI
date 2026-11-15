@@ -2,23 +2,69 @@ package com.team.frameai.guide
 
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.model.LiveGuide
+import com.team.frameai.model.SceneRead
+import kotlin.math.abs
 
 /**
  * Eases the face box and emits at about 4 Hz.
  * A face appearing or disappearing is delivered immediately so a stale READY cannot linger.
+ * The held composition stays put until a new one is clearly more confident.
  */
 class GuideSmoother(
     private val engine: GuideEngine = GuideEngine(),
     private val minIntervalMs: Long = 250L,
     private val smoothing: Float = 0.45f,
+    private val stabilizer: CompositionStabilizer = CompositionStabilizer(),
 ) {
     private var smoothed: FaceBoxNormalized? = null
     private var lastEmitMs: Long = Long.MIN_VALUE
     private var lastGuide: LiveGuide? = null
 
-    fun update(face: FaceBoxNormalized?, nowMs: Long, steady: Boolean? = null): LiveGuide {
+    fun update(
+        face: FaceBoxNormalized?,
+        nowMs: Long,
+        steady: Boolean? = null,
+        scene: SceneRead? = null,
+    ): LiveGuide {
         val blended = blend(face)
-        val suggestion = engine.suggest(blended, steady)
+        if (blended == null) {
+            stabilizer.clear()
+            return publish(engine.advise(null, steady, scene), nowMs)
+        }
+        val natural = engine.advise(blended, steady, scene)
+        val stable = stabilizer.choose(
+            natural.strategy,
+            natural.confidence,
+            natural.guide.targetX.toFloat(),
+            natural.urgent,
+        )
+        val framing = if (sameChoice(natural, stable)) {
+            natural
+        } else {
+            engine.advise(
+                blended,
+                steady,
+                scene,
+                lockedStrategy = stable.strategy,
+                lockedTargetX = stable.targetX,
+            )
+        }
+        if (stable.strategy == CompositionStrategy.GEOMETRY && framing.strategy != CompositionStrategy.GEOMETRY) {
+            val kept = lastGuide
+            if (kept != null && GeometryCoach.isCue(kept.message)) return kept
+        }
+        return publish(framing, nowMs)
+    }
+
+    fun lastKind(): String? = lastGuide?.kind
+
+    private fun sameChoice(natural: Framing, stable: StableChoice): Boolean {
+        val heldX = stable.targetX ?: return natural.strategy == stable.strategy
+        return natural.strategy == stable.strategy && abs(natural.guide.targetX.toFloat() - heldX) < 0.02f
+    }
+
+    private fun publish(framing: Framing, nowMs: Long): LiveGuide {
+        val suggestion = framing.guide
         val previous = lastGuide
         val sameKind = previous != null && previous.kind == suggestion.kind
         if (sameKind && nowMs - lastEmitMs < minIntervalMs) {
@@ -28,8 +74,6 @@ class GuideSmoother(
         lastEmitMs = nowMs
         return suggestion
     }
-
-    fun lastKind(): String? = lastGuide?.kind
 
     private fun blend(face: FaceBoxNormalized?): FaceBoxNormalized? {
         val prior = smoothed
@@ -50,6 +94,10 @@ class GuideSmoother(
             top = from.top + (to.top - from.top) * weight,
             right = from.right + (to.right - from.right) * weight,
             bottom = from.bottom + (to.bottom - from.bottom) * weight,
+            anchorX = from.anchorX + (to.anchorX - from.anchorX) * weight,
+            anchorY = from.anchorY + (to.anchorY - from.anchorY) * weight,
+            anchorKind = to.anchorKind,
+            yawDegrees = to.yawDegrees,
         )
     }
 }

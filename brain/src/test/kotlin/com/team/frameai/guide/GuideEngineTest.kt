@@ -44,22 +44,24 @@ class GuideEngineTest {
     fun aLargeFaceIsNotReadyJustBecauseItSitsOnAThird() {
         val guide = engine.suggest(areaAt(0.50f, 0.40f, 0.56f, 0.36f))
         assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
-        assertEquals(GuideEngine.LARGE_MESSAGE, guide.message)
+        assertEquals(GuideEngine.BREATHING_CUE, guide.message)
     }
 
     @Test
     fun aCutOffFaceIsCalledOutBeforePlacement() {
         val guide = engine.suggest(areaAt(0.10f, 0.33f, 0.22f, 0.30f))
-        assertEquals(GuideEngine.EDGE_MESSAGE, guide.message)
+        assertEquals(GuideEngine.BREATHING_CUE, guide.message)
     }
 
     @Test
-    fun aBrightSideMovesTheFaceToTheCalmerThird() {
+    fun aBrightSideBreaksATieAndDoesNotPullASettledThird() {
         val brightLeft = SceneRead(leftLuma = 0.82f, rightLuma = 0.28f, warmth = 0.2f)
-        val guide = engine.suggest(boxAt(0.33f, 0.33f), scene = brightLeft)
-        assertEquals(0.67, guide.targetX, 0.0001)
-        assertEquals(GuideEngine.PLACE_ANY_MESSAGE, guide.message)
+        val staying = engine.suggest(boxAt(0.33f, 0.33f), scene = brightLeft)
+        assertEquals(0.33, staying.targetX, 0.0001)
+        assertEquals(GuideEngine.KIND_READY, staying.kind)
         assertEquals(LutIds.WARM_FILM, brightLeft.lookId)
+        val ambiguous = engine.suggest(boxAt(0.50f, 0.33f), scene = brightLeft)
+        assertEquals(0.67, ambiguous.targetX, 0.0001)
         val settled = engine.suggest(boxAt(0.67f, 0.33f), scene = brightLeft)
         assertEquals(GuideEngine.KIND_READY, settled.kind)
         assertEquals(GuideEngine.READY_WARM, settled.message)
@@ -81,7 +83,7 @@ class GuideEngineTest {
         val guide = engine.suggest(null, scene = sky)
         assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
         assertEquals(0.33, guide.targetY, 0.0001)
-        assertEquals(GuideEngine.HORIZON_UPPER, guide.message)
+        assertEquals(GuideEngine.HORIZON_HIGHER_CUE, guide.message)
         assertEquals(0.5, guide.subjectY!!, 0.0001)
         assertNull(guide.referenceId)
         assertNull(guide.zoom)
@@ -119,7 +121,8 @@ class GuideEngineTest {
         assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
         assertNull(guide.subjectX)
         assertEquals(0.5, guide.subjectY)
-        assertEquals(0.33, guide.targetY, 0.0001)
+        assertEquals(0.67, guide.targetY, 0.0001)
+        assertEquals(GuideEngine.HORIZON_LOWER_CUE, guide.message)
     }
 
     @Test
@@ -143,8 +146,8 @@ class GuideEngineTest {
     fun aPersonMapsToAPortraitReferenceAndZoom() {
         val clipped = areaAt(0.10f, 0.33f, 0.22f, 0.30f)
         val clippedGuide = engine.suggest(clipped)
-        assertEquals(GuideEngine.EDGE_MESSAGE, clippedGuide.message)
-        assertEquals(GuideEngine.ZOOM_OUT, clippedGuide.zoom)
+        assertEquals(GuideEngine.BREATHING_CUE, clippedGuide.message)
+        assertEquals(GuideEngine.ZOOM_HOLD, clippedGuide.zoom)
         assertEquals(1.0, clippedGuide.targetZoomRatio!!, 0.0001)
         assertEquals(GuideEngine.PORTRAIT_SPACE_RIGHT, clippedGuide.referenceId)
         assertEquals(GuideEngine.THIRD_LO.toDouble(), clippedGuide.targetX, 0.0001)
@@ -159,10 +162,8 @@ class GuideEngineTest {
 
         val small = areaAt(0.48f, 0.46f, 0.10f, 0.12f)
         val smallGuide = engine.suggest(small)
-        assertEquals(GuideEngine.SMALL_MESSAGE, smallGuide.message)
-        assertEquals(GuideEngine.ZOOM_IN, smallGuide.zoom)
-        assertTrue(smallGuide.targetZoomRatio!! > 1.0)
-        assertTrue(smallGuide.targetZoomRatio!! <= 8.0)
+        assertEquals(GuideEngine.ZOOM_HOLD, smallGuide.zoom)
+        assertEquals(1.0, smallGuide.targetZoomRatio!!, 0.0001)
         assertEquals(GuideEngine.PORTRAIT_SPACE_RIGHT, smallGuide.referenceId)
         val smallGoal = PortraitFrame.goal(
             smallGuide.targetX.toFloat(),
@@ -171,13 +172,13 @@ class GuideEngineTest {
             small,
         )
         assertEquals(smallGuide.targetX.toFloat(), smallGoal.centerX, 0.0001f)
-        assertTrue(smallGoal.width > small.width)
-        assertTrue(smallGoal.height > small.height)
+        assertEquals(small.width, smallGoal.width, 0.0001f)
+        assertEquals(small.height, smallGoal.height, 0.0001f)
         assertFalse(smallGuide.isReady)
 
         val large = areaAt(0.50f, 0.40f, 0.70f, 0.70f)
         val largeGuide = engine.suggest(large)
-        assertEquals(GuideEngine.LARGE_MESSAGE, largeGuide.message)
+        assertEquals(GuideEngine.BREATHING_CUE, largeGuide.message)
         assertEquals(GuideEngine.ZOOM_OUT, largeGuide.zoom)
         assertEquals(1.0, largeGuide.targetZoomRatio!!, 0.0001)
         assertTrue(
@@ -223,7 +224,7 @@ class GuideEngineTest {
     fun centeredFaceIsReady() {
         val guide = engine.suggest(boxAt(0.67f, 0.33f))
         assertEquals(GuideEngine.KIND_READY, guide.kind)
-        assertEquals(GuideEngine.READY_MESSAGE, guide.message)
+        assertEquals(GuideEngine.GREAT_CUE, guide.message)
         assertTrue(guide.isReady)
         assertEquals(0.67, guide.subjectX!!, 0.0001)
         assertEquals(0.33, guide.subjectY!!, 0.0001)
@@ -250,13 +251,11 @@ class GuideEngineTest {
     }
 
     @Test
-    fun offCenterFaceAlignsWithoutADirection() {
+    fun offCenterFaceAsksForTheCameraMove() {
         val guide = engine.suggest(boxAt(0.48f, 0.39f), steady = false)
         assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
-        assertEquals(GuideEngine.ALIGN_MESSAGE, guide.message)
+        assertEquals(CoachAction.MOVE_RIGHT, guide.message)
         assertFalse(guide.isReady)
-        assertFalse(guide.message.contains("left", ignoreCase = true))
-        assertFalse(guide.message.contains("right", ignoreCase = true))
         assertEquals(engine.suggest(boxAt(0.48f, 0.39f), steady = true).kind, guide.kind)
     }
 

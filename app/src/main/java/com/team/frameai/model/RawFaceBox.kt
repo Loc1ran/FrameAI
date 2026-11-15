@@ -11,4 +11,10 @@ data class RawFaceBox(
     val top: Float,
     val right: Float,
     val bottom: Float,
+    /** Upright-image anchor after it has been converted into the unrotated buffer. */
+    val anchorX: Float? = null,
+    val anchorY: Float? = null,
+    val anchorKind: AnchorKind = AnchorKind.BOX,
+    /** ML Kit Euler Y in the upright image. Positive turns toward that image's right. Null if unavailable. */
+    val yawDegrees: Float? = null,
 )
