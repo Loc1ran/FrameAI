@@ -102,7 +102,7 @@ fun CameraScreen(
     var areaAt by remember { mutableLongStateOf(0L) }
     var capturing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var cloudOn by rememberSaveable { mutableStateOf(false) }
+    val cloudOn = true
     var aiFailed by remember { mutableStateOf(false) }
     var aiReplyAt by remember { mutableLongStateOf(0L) }
     var aiReply by remember { mutableStateOf<LiveCoach?>(null) }
@@ -191,7 +191,7 @@ fun CameraScreen(
                         }
                         if (reply != null) {
                             coachGate.lastKey = requestKey
-                            if (requestMode == CompositionMode.SUBJECT) {
+                            if (requestMode == CompositionMode.SUBJECT && !picked) {
                                 director.offer(reply, SystemClock.elapsedRealtime())
                             }
                             val look = LutAdvice.accept(reply.suggestedLutId, reply.sceneType)
@@ -240,10 +240,14 @@ fun CameraScreen(
     )
     val episode = Odyssey.episodeAt(episodeIndex)
     val aiAction = goal?.action ?: reply?.actionType
-    val movement = if (mode != CompositionMode.ACTION) aiAction?.let(ViewpointGuidance::cue) else null
+    val movement = if (mode == CompositionMode.SCENE ||
+        mode == CompositionMode.SUBJECT && live?.hideGoal == true && live?.source == AdviceSource.GEMINI.wire
+    ) aiAction?.let(ViewpointGuidance::cue) else null
     val aiPreset = goal?.preset ?: reply?.compositionPreset ?: "none"
     val aiReady = aiAction == "hold" && reply?.isReady == true
-    val drawn = if (mode != CompositionMode.ACTION && aiAction != null) {
+    val drawn = if (mode == CompositionMode.SUBJECT) {
+        SubjectPresentation.guide(live, area)
+    } else if (mode == CompositionMode.SCENE && aiAction != null) {
         AiDrawing.guide(
             aiAction,
             aiPreset,
@@ -271,35 +275,10 @@ fun CameraScreen(
         )
         CompositionMode.SUBJECT -> when {
             trackingError != null -> FramingHint("Tracking unavailable", trackingError.orEmpty(), "!")
-            goal != null -> FramingHint(
-                goal.instruction,
-                goal.reason,
-                AiDrawing.symbol(goal.action, aiReady),
-                aiReady,
-            )
-            reply != null -> FramingHint(
-                reply.message,
-                reply.actionReason.ifBlank { "The arrow matches this direction." },
-                AiDrawing.symbol(reply.actionType, aiReady),
-                aiReady,
-            )
-            !cloudOn || !client.enabled -> FramingHint(
-                "Athena is off",
-                "Turn AI on for a direction. Nothing is drawn until she answers, and you can still take the photo.",
-                "◎",
-            )
-            aiFailed -> FramingHint(
-                "Athena is unavailable",
-                "No guide is drawn until she answers. You can still take the photo.",
-                "◎",
-            )
-            else -> FramingHint(
-                "Athena is looking",
-                "The grid stays up. The arrow appears when she chooses a direction.",
-                "◎",
-            )
+            else -> framingHint(drawn, area)
         }
     }
+
     val hint = plainHint
     val trials = remember { TrialSession() }
     var athenaOffer by remember { mutableStateOf<OdysseyTrial?>(null) }
@@ -379,8 +358,15 @@ fun CameraScreen(
                         Modifier.fillMaxSize().pointerInput(mode) {
                             detectTapGestures { offset ->
                                 if (size.width <= 0f || size.height <= 0f) return@detectTapGestures
+                                if (capturing) return@detectTapGestures
                                 tapMark = offset
-                                controller.selectSubjectAt(offset.x / size.width, offset.y / size.height)
+                                val x = offset.x / size.width
+                                val y = offset.y / size.height
+                                controller.focusAt(x, y)
+                                picked = controller.selectSubjectAt(x, y)
+                                area = null
+                                live = null
+                                compositionGuide?.reset()
                                 director.bump()
                                 coachGate.lastKey = ""
                                 modeGeneration++
@@ -523,7 +509,7 @@ fun CameraScreen(
         }
         Column(Modifier.fillMaxSize()) {
             CameraToolbar(
-                mode, frameRatio, guided, cloudOn, client.enabled, orientationDegrees, voyage,
+                mode, frameRatio, guided, orientationDegrees, voyage,
                 onMode = { choice ->
                     if (capturing) return@CameraToolbar
                     if (choice != CompositionMode.SUBJECT) controller.clearSubjectSelection()
@@ -544,19 +530,6 @@ fun CameraScreen(
                         guided = true
                         onEpisode(0)
                     }
-                },
-                onCloud = {
-                    if (capturing) return@CameraToolbar
-                    val enable = !cloudOn
-                    cloudOn = enable
-                    aiReply = null
-                    aiFailed = false
-                    modeGeneration++
-                    director.bump()
-                    coachGate.lastKey = ""
-                    lookName = null
-                    controller.sceneLutAllowed = true
-                    if (enable) controller.requestAnalysisSoon()
                 },
                 showLightingMap = showLightingMap,
                 onLightingMap = { showLightingMap = !showLightingMap },
@@ -597,14 +570,11 @@ private fun CameraToolbar(
     mode: CompositionMode,
     ratio: FrameRatio,
     guided: Boolean,
-    cloudOn: Boolean,
-    cloudAvailable: Boolean,
     orientationDegrees: Int,
     voyage: Boolean,
     onMode: (CompositionMode) -> Unit,
     onRatio: (FrameRatio) -> Unit,
     onVoyage: () -> Unit,
-    onCloud: () -> Unit,
     showLightingMap: Boolean,
     onLightingMap: () -> Unit,
     onOpenJournal: () -> Unit,
@@ -661,10 +631,7 @@ private fun CameraToolbar(
                 } }, onClick = { onVoyage(); menu = null })
                 DropdownMenuItem(text = { Text(if (showLightingMap) "Hide lighting map" else "Show lighting map") },
                     onClick = { onLightingMap(); menu = null })
-                if (cloudAvailable) DropdownMenuItem(text = { Column {
-                    Text(if (cloudOn) "Turn AI off" else "Turn AI on")
-                    Text("Shares preview images while on", fontSize = 12.sp)
-                } }, onClick = { onCloud(); menu = null })
+
                 } }
             }
         }
@@ -724,7 +691,7 @@ private fun CaptureDeck(
             if (mode == CompositionMode.SUBJECT) {
                 Text(
                     if (picked) "Following your tap. Tap empty space to choose automatically."
-                    else "Tap a subject to choose what to follow.",
+                    else "Tap a detected subject to focus and follow it.",
                     color = FrameMuted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 8.dp),

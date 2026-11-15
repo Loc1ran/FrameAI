@@ -10,4 +10,5 @@ fun interface CompositionGuide {
      * [scene] is the background read for this frame. Null when the frame could not be sampled.
      */
     fun suggest(faceBox: FaceBoxNormalized?, steady: Boolean?, scene: SceneRead?): LiveGuide
+    fun reset() {}
 }

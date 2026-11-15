@@ -21,7 +21,15 @@ class GuideSmoother(
     private var smoothed: FaceBoxNormalized? = null
     private var lastEmitMs: Long = Long.MIN_VALUE
     private var lastGuide: LiveGuide? = null
-    private val lightingHold = LightingHold()
+    private var lightingHold = LightingHold()
+
+    fun reset() {
+        smoothed = null
+        lastEmitMs = Long.MIN_VALUE
+        lastGuide = null
+        stabilizer.clear()
+        lightingHold = LightingHold()
+    }
 
     fun update(
         face: FaceBoxNormalized?,

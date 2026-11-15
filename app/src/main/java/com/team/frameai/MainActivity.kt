@@ -27,8 +27,10 @@ class MainActivity : ComponentActivity() {
                 photoGrader = grader,
                 faceDetector = faceDetector,
                 director = director,
-                compositionGuide = CompositionGuide { face, steady, scene ->
-                    guide.update(face, SystemClock.elapsedRealtime(), steady, scene)
+                compositionGuide = object : CompositionGuide {
+                    override fun suggest(faceBox: com.team.frameai.model.FaceBoxNormalized?, steady: Boolean?, scene: com.team.frameai.model.SceneRead?) =
+                        guide.update(faceBox, SystemClock.elapsedRealtime(), steady, scene)
+                    override fun reset() = guide.reset()
                 },
             )
         }

@@ -18,6 +18,7 @@ import androidx.camera.view.transform.ImageProxyTransformFactory
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.vision.FaceBoxMath
 import androidx.camera.core.ImageCapture
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
@@ -48,6 +49,7 @@ class FrameCameraController(context: Context) {
     private val subjectTracker = MlKitSubjectTracker()
     @Volatile private var generation = 0
     @Volatile private var running = false
+    @Volatile private var selectionGeneration = 0
     /** CameraX only allows reading the selector on the main thread. Analysis keeps this copy. */
     @Volatile private var facingFront = false
     @Volatile private var lastFrameSentAt = 0L
@@ -248,10 +250,15 @@ class FrameCameraController(context: Context) {
         if (!running) return
         val token = generation
         val frameAt = SystemClock.elapsedRealtime()
+        val selectionStamp = selectionGeneration
         val manual = subjectTracker.hasSelection
-        val tracked = subjectTracker.inspect(image)
-        val face = if (manual) null else detector?.detectPrimaryFace(image)
-        val raw = if (manual) tracked.primary else face ?: tracked.primary
+        // A temporarily unavailable object model must not disable the bundled face detector.
+        val tracked = try { subjectTracker.inspect(image) } catch (error: Exception) {
+            Log.w("FrameAI", "Object tracking unavailable; retaining face analysis", error)
+            TrackedFrame(null, emptyList())
+        }
+        val face = detector?.detectPrimaryFace(image)
+        val raw = com.team.frameai.guide.SubjectFraming.choose(face, tracked.primary, manual)
         val overlap = ShapeOverlap.strongest(tracked.boxes)
         val samples = LumaGridSampler.sample(image)
         val measured = samples?.let { GeometryMeasure.measure(it).forViewer(frontCamera()) }
@@ -277,7 +284,7 @@ class FrameCameraController(context: Context) {
         )
         if (scene != null && sceneLutAllowed) suggestedLutId = scene.lookId
         mainHandler.post {
-            if (!running || token != generation) return@post
+            if (!running || token != generation || selectionStamp != selectionGeneration) return@post
             try {
                 val preview = previewView
                 val target = preview?.outputTransform
@@ -395,8 +402,26 @@ class FrameCameraController(context: Context) {
 
     private fun frontCamera(): Boolean = facingFront
 
+    /** PreviewView maps the visible tap through crop/rotation to the camera's metering region. */
+    fun focusAt(x: Float, y: Float) {
+        val preview = previewView ?: return
+        val control = lifecycleController.cameraControl ?: return
+        if (preview.width <= 0 || preview.height <= 0) return
+        try {
+            val point = preview.meteringPointFactory.createPoint(
+                x.coerceIn(0f, 1f) * preview.width, y.coerceIn(0f, 1f) * preview.height,
+            )
+            val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS).build()
+            control.startFocusAndMetering(action)
+        } catch (error: Exception) {
+            Log.w("FrameAI", "Tap focus unavailable", error)
+        }
+    }
+
     /** Selects the object under the tap, in preview coordinates from 0 to 1. An empty tap clears it. */
     fun selectSubjectAt(x: Float, y: Float): Boolean {
+        selectionGeneration++
         val chosen = SubjectTap.choose(previewTargets.get(), x, y)
         val id = chosen?.id
         if (id == null) {
@@ -407,7 +432,10 @@ class FrameCameraController(context: Context) {
         return true
     }
 
-    fun clearSubjectSelection() = subjectTracker.clearSelection()
+    fun clearSubjectSelection() {
+        selectionGeneration++
+        subjectTracker.clearSelection()
+    }
 
     private fun maybeSendFrame(image: androidx.camera.core.ImageProxy) {
         if (!captureFrames) return
