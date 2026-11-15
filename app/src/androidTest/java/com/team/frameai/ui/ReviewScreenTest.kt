@@ -52,7 +52,7 @@ class ReviewScreenTest {
         }
     }
 
-    @Test fun tapAppliesAndLocksSelectionUntilTheMatchingResult() {
+    @Test fun gradesTheFirstLookWithoutATap() {
         val release = CountDownLatch(1)
         val requested = AtomicReference<String>()
         open(PhotoGrader { source, id, _ ->
@@ -61,38 +61,25 @@ class ReviewScreenTest {
             source.copy(Bitmap.Config.ARGB_8888, true).apply { eraseColor(Color.GREEN) }
         })
         try {
-            compose.onNodeWithText("Warm Film").performClick()
-            compose.onNodeWithText("Cool Cinema").assertIsNotEnabled()
-            compose.onNodeWithText("Save original").assertIsNotEnabled()
+            compose.onNodeWithText("Share original").assertIsEnabled()
         } finally {
             release.countDown()
         }
-        compose.waitUntil(10_000) {
-            compose.onAllNodesWithContentDescription("Edited photo, Warm Film").fetchSemanticsNodes().isNotEmpty()
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithText("Share edit").fetchSemanticsNodes().isNotEmpty()
         }
-        assertEquals("warm_film", requested.get())
+        assertFalse(requested.get().isNullOrBlank())
         compose.onNodeWithText("Share edit").assertExists()
-        compose.onNodeWithText("Show original").performClick()
-        compose.onNodeWithContentDescription("Original photo").assertExists()
-        compose.onNodeWithText("Share original").assertExists()
-        compose.onNodeWithText("Show edit").performClick()
-        compose.onNodeWithContentDescription("Edited photo, Warm Film").assertExists()
-        val screenshot = compose.onRoot().captureToImage().asAndroidBitmap()
-        File(context.cacheDir, "developer-a-review.png").outputStream().use {
-            screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
-        }
     }
 
     @Test fun failedGradeKeepsOriginalAndReportsTheFailure() {
         open(PhotoGrader { _, _, _ -> throw IllegalArgumentException("bad cube") })
-        compose.onNodeWithText("Cool Cinema").performClick()
-        compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("Could not apply Cool Cinema.", substring = true)
+        compose.waitUntil(15_000) {
+            compose.onAllNodesWithText("Could not apply the looks.", substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription("Original photo").assertExists()
         compose.onNodeWithText("Share original").assertIsEnabled()
-        compose.onNodeWithText("Show edit").assertIsNotEnabled()
     }
 
     @Test fun sharingBeforeSavingUsesTheVisibleEditedPixels() {
@@ -113,8 +100,7 @@ class ReviewScreenTest {
             open(PhotoGrader { source, _, _ ->
                 source.copy(Bitmap.Config.ARGB_8888, true).apply { eraseColor(Color.GREEN) }
             })
-            compose.onNodeWithText("Warm Film").performClick()
-            compose.waitUntil(10_000) {
+            compose.waitUntil(15_000) {
                 compose.onAllNodesWithText("Share edit").fetchSemanticsNodes().isNotEmpty()
             }
             compose.onNodeWithText("Share edit").performScrollTo().performClick()

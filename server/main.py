@@ -104,7 +104,7 @@ async def shot_review(
     if not _gemini_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="AI is busy")
     try:
-        model_id = os.environ.get("MODEL_ID", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+        model_id = os.environ.get("MODEL_ID", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         return review_image(payload, api_key, model_id)
     except GeminiNotConfigured:
@@ -143,7 +143,7 @@ async def live_coach(
     if not _gemini_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="AI is busy")
     try:
-        model_id = os.environ.get("MODEL_ID", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+        model_id = os.environ.get("MODEL_ID", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         return accept_director(
             coach_image(
@@ -188,7 +188,7 @@ async def action_best_shot(
     if not _gemini_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="AI is busy")
     try:
-        model_id = os.environ.get("MODEL_ID", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+        model_id = os.environ.get("MODEL_ID", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         return select_action_best(frames, api_key, model_id)
     except GeminiNotConfigured:

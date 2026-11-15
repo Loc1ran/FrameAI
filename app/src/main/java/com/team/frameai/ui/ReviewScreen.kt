@@ -4,8 +4,9 @@ import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+private const val ORIGINAL_PAGE = "original"
+
 private data class GradedPhoto(val lutId: String, val bitmap: Bitmap)
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -57,13 +60,13 @@ fun ReviewScreen(
         )
     }
     var original by remember(originalPath) { mutableStateOf<Bitmap?>(null) }
-    var edited by remember(originalPath) { mutableStateOf<GradedPhoto?>(null) }
-    var showEdited by remember(originalPath) { mutableStateOf(false) }
+    var variants by remember(originalPath) { mutableStateOf<List<GradedPhoto>>(emptyList()) }
+    var applying by remember(originalPath) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var cloudEnabled by remember { mutableStateOf(false) }
     var coaching by remember(originalPath) { mutableStateOf<ShotReview?>(null) }
-    var savedEdit by remember(originalPath) { mutableStateOf<File?>(null) }
+    var savedEdits by remember(originalPath) { mutableStateOf<Map<String, File>>(emptyMap()) }
     var openFailed by remember(originalPath) { mutableStateOf(false) }
     var bestMatch by remember(originalPath) { mutableStateOf(suggestedLut.takeIf { it in LutPack.ids }) }
     var matchReason by remember(originalPath) { mutableStateOf<String?>(null) }
@@ -82,75 +85,122 @@ fun ReviewScreen(
         }
         original = decoded
         openFailed = decoded == null
-        if (openFailed) {
+        if (openFailed || decoded == null) {
             status = "Could not open this photo. Return to the camera to try again."
             return@LaunchedEffect
         }
-        if (!client.cloudConfigured || decoded == null) return@LaunchedEffect
-        try {
-            status = "Choosing 10 looks…"
-            val jpeg = withContext(Dispatchers.Default) { ImageSaver.jpegForReview(decoded) }
-            val review = client.review(jpeg, cloudEnabled = true)
-            if (review.source == "gemini") {
-                bestMatch = review.suggestedLutId.takeIf { it in LutPack.ids }
-                matchReason = review.lutReason.takeIf { bestMatch != null }
-                if (review.candidateLutIds.isNotEmpty()) rankedIds = review.candidateLutIds
+        var chosen = reviewLookIds(emptyList(), suggestedLut.takeIf { it in LutPack.ids })
+        if (client.cloudConfigured) {
+            try {
+                status = "Choosing looks…"
+                val jpeg = withContext(Dispatchers.Default) { ImageSaver.jpegForReview(decoded) }
+                val review = client.review(jpeg, cloudEnabled = true)
+                if (review.source == "gemini") {
+                    val match = review.suggestedLutId.takeIf { it in LutPack.ids }
+                    bestMatch = match
+                    matchReason = review.lutReason.takeIf { match != null }
+                    if (review.candidateLutIds.isNotEmpty()) rankedIds = review.candidateLutIds
+                    chosen = reviewLookIds(review.candidateLutIds, match)
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                // The bundled looks still get applied.
             }
-        } catch (cancel: CancellationException) {
-            throw cancel
-        } catch (_: Exception) {
-            // The starting row stays available when the ranking does not arrive.
-        } finally {
-            if (status == "Choosing 10 looks…") status = null
+        }
+        applying = true
+        val graded = mutableListOf<GradedPhoto>()
+        var failed = 0
+        chosen.forEachIndexed { index, id ->
+            status = "Applying looks ${index + 1}/${chosen.size}…"
+            try {
+                val bitmap = withContext(Dispatchers.Default) {
+                    photoGrader.apply(decoded, id, LutPack.REVIEW_INTENSITY)
+                }
+                graded += GradedPhoto(id, bitmap)
+                variants = graded.toList()
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                failed++
+            }
+        }
+        applying = false
+        status = if (failed == chosen.size && chosen.isNotEmpty()) {
+            "Could not apply the looks. Your original is unchanged."
+        } else {
+            null
         }
     }
 
     suspend fun materializeEdit(photo: GradedPhoto): File {
-        savedEdit?.takeIf { it.isFile }?.let { return it }
+        savedEdits[photo.lutId]?.takeIf { it.isFile }?.let { return it }
         val file = withContext(Dispatchers.IO) {
             ImageSaver.createEdit(context, capturedAt, photo.lutId).also {
                 ImageSaver.writeJpeg(photo.bitmap, it)
             }
         }
-        savedEdit = file
+        savedEdits = savedEdits + (photo.lutId to file)
         return file
     }
 
-    val visibleEdit = edited.takeIf { showEdited }
-    val shown = visibleEdit?.bitmap ?: original
-    val outputLabel = if (visibleEdit == null) "original" else "edit"
-
-    val shownLooks = reviewLookIds(rankedIds, bestMatch, edited?.lutId).mapNotNull { id ->
-        LutPack.looks.firstOrNull { it.id == id }
+    val pages = buildList {
+        if (variants.isEmpty()) {
+            original?.let { add(GradedPhoto(ORIGINAL_PAGE, it)) }
+        } else {
+            addAll(variants)
+            original?.let { add(GradedPhoto(ORIGINAL_PAGE, it)) }
+        }
     }
+    val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
+    val current = pages.getOrNull(pagerState.currentPage)
+    val onOriginal = current == null || current.lutId == ORIGINAL_PAGE
+    val outputLabel = if (onOriginal) "original" else "edit"
+    val currentName = if (current == null || current.lutId == ORIGINAL_PAGE) "Original" else lutLabel(current.lutId)
 
     val photo: @Composable (Modifier) -> Unit = { modifier ->
         Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(visibleEdit?.let { "Edited · ${lutLabel(it.lutId)}" } ?: "Original", color = FramePaper)
-            Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                .background(FrameSurface), contentAlignment = Alignment.Center) {
-                if (shown != null) {
-                    Image(
-                        bitmap = shown.asImageBitmap(),
-                        contentDescription = visibleEdit?.let { "Edited photo, ${lutLabel(it.lutId)}" } ?: "Original photo",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().testTag("reviewPhoto"),
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(currentName, color = FramePaper, modifier = Modifier.weight(1f))
+                if (pages.size > 1) {
+                    Text(
+                        "${pagerState.currentPage + 1} / ${pages.size}",
+                        color = FrameMuted,
+                        fontSize = 12.sp,
                     )
-                } else if (!openFailed) {
-                    Text("Opening photo…", color = FrameMuted)
+                }
+            }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                val item = pages.getOrNull(page)
+                Box(
+                    Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(FrameSurface),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (item != null) {
+                        val description = if (item.lutId == ORIGINAL_PAGE) "Original photo"
+                        else "Edited photo, ${lutLabel(item.lutId)}"
+                        Image(
+                            bitmap = item.bitmap.asImageBitmap(),
+                            contentDescription = description,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().testTag("reviewPhoto"),
+                        )
+                    } else if (!openFailed) {
+                        Text("Opening photo…", color = FrameMuted)
+                    }
                 }
             }
         }
     }
     val controls: @Composable (Modifier) -> Unit = { modifier ->
         Column(modifier.verticalScroll(rememberScrollState())) {
-        Text("CHOOSE YOUR LOOK", color = FrameGold, fontSize = 11.sp)
+        Text("YOUR LOOKS", color = FrameGold, fontSize = 11.sp)
         Text(
-            if (rankedIds.isEmpty()) {
-                "Swipe to explore 10 looks. Tap a look to preview it."
-            } else {
-                "10 looks chosen for this photo. Tap one to preview it."
-            },
+            "Swipe left or right. Save keeps the picture on screen.",
             color = FrameMuted,
             fontSize = 12.sp,
         )
@@ -163,73 +213,20 @@ fun ReviewScreen(
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FilterChip(
-                selected = !showEdited,
-                enabled = original != null && !busy,
-                onClick = { showEdited = false; status = null },
-                label = { Text("Original") },
-            )
-            shownLooks.forEach { look ->
-                FilterChip(
-                    selected = visibleEdit?.lutId == look.id,
-                    enabled = original != null && !busy,
-                    onClick = {
-                        val id = look.id
-                        val label = look.name
-                        if (edited?.lutId == id) {
-                            showEdited = true
-                            status = null
-                        } else {
-                            val source = original ?: return@FilterChip
-                            busy = true
-                            edited = null
-                            showEdited = false
-                            savedEdit = null
-                            status = "Applying $label…"
-                            scope.launch {
-                                try {
-                                    val bitmap = withContext(Dispatchers.Default) {
-                                        photoGrader.apply(source, id, LutPack.REVIEW_INTENSITY)
-                                    }
-                                    edited = GradedPhoto(id, bitmap)
-                                    showEdited = true
-                                    status = null
-                                } catch (cancel: CancellationException) {
-                                    throw cancel
-                                } catch (_: Exception) {
-                                    status = "Could not apply $label. Your original is unchanged. Try again."
-                                } finally {
-                                    busy = false
-                                }
-                            }
-                        }
-                    },
-                    label = { Text(look.name) },
-                )
-            }
-        }
-        if (busy) {
+        if (applying || busy) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
         }
         status?.let { Text(it, color = FrameGold, modifier = Modifier.padding(vertical = 8.dp)) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                enabled = edited != null && !busy,
-                onClick = { showEdited = !showEdited; status = null },
-            ) { Text(if (showEdited) "Show original" else "Show edit") }
             Button(
-                enabled = shown != null && !busy,
+                enabled = current != null && !busy,
                 onClick = {
-                    val photo = visibleEdit
+                    val photo = current
                     busy = true
                     scope.launch {
                         try {
-                            val file = if (photo != null) materializeEdit(photo) else File(originalPath)
+                            val file = if (photo == null || photo.lutId == ORIGINAL_PAGE) File(originalPath)
+                            else materializeEdit(photo)
                             val uri = withContext(Dispatchers.IO) { ImageSaver.exportToGallery(context, file) }
                             status = if (uri != null) "Saved $outputLabel to Pictures/FrameAI."
                             else "Kept $outputLabel in FrameAI. Use Share to save it to another app."
@@ -244,13 +241,14 @@ fun ReviewScreen(
                 },
             ) { Text("Save $outputLabel") }
             OutlinedButton(
-                enabled = shown != null && !busy,
+                enabled = current != null && !busy,
                 onClick = {
-                    val photo = visibleEdit
+                    val photo = current
                     busy = true
                     scope.launch {
                         try {
-                            val file = if (photo != null) materializeEdit(photo) else File(originalPath)
+                            val file = if (photo == null || photo.lutId == ORIGINAL_PAGE) File(originalPath)
+                            else materializeEdit(photo)
                             ImageSaver.share(context, file)
                             status = null
                         } catch (cancel: CancellationException) {
@@ -265,8 +263,11 @@ fun ReviewScreen(
             ) { Text("Share $outputLabel") }
         }
         Text(
-            visibleEdit?.let { "Edit: ${it.bitmap.width} × ${it.bitmap.height} px. Full-size original kept." }
-                ?: "Your full-size original is kept. Edited copies are up to 1024 px on the long edge.",
+            if (current == null || current.lutId == ORIGINAL_PAGE) {
+                "Your full-size original is kept. Edited copies are up to 1024 px on the long edge."
+            } else {
+                "Edit: ${current.bitmap.width} × ${current.bitmap.height} px. Full-size original kept."
+            },
             color = FrameMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp, bottom = 20.dp),
         )
 
