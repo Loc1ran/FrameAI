@@ -17,6 +17,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.team.frameai.guide.FrameRect
 import com.team.frameai.guide.GeometryMeasure
+import com.team.frameai.guide.LightingAnalyzer
+import com.team.frameai.guide.LightingMap
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.guide.ShapeOverlap
 import com.team.frameai.guide.SubjectTap
@@ -45,8 +47,8 @@ class FrameCameraController(context: Context) {
     @Volatile var detector: PrimaryFaceDetector? = null
     @Volatile var compositionGuide: CompositionGuide? = null
     @Volatile var previewView: androidx.camera.view.PreviewView? = null
-    @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, SceneGeometry?, String?, Boolean) -> Unit =
-        { _, _, _, _, _ -> }
+    @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, SceneGeometry?, LightingMap?, String?, Boolean) -> Unit =
+        { _, _, _, _, _, _ -> }
     private val previewTargets = java.util.concurrent.atomic.AtomicReference<List<TrackCandidate>>(emptyList())
     @Volatile var onFrameJpeg: ((ByteArray) -> Unit)? = null
     @Volatile var captureFrames: Boolean = false
@@ -92,6 +94,7 @@ class FrameCameraController(context: Context) {
                 mainHandler.post {
                     if (running && token == generation) onGuide(
                         staticTargetGuide(),
+                        null,
                         null,
                         null,
                         "Object detection is unavailable. Reopen the camera to retry; you can still take a photo.",
@@ -174,9 +177,8 @@ class FrameCameraController(context: Context) {
         val face = if (manual) null else detector?.detectPrimaryFace(image)
         val raw = if (manual) tracked.primary else face ?: tracked.primary
         val overlap = ShapeOverlap.strongest(tracked.boxes)
-        val measured = LumaGridSampler.sample(image)?.let { samples ->
-            GeometryMeasure.measure(samples).forViewer(frontCamera())
-        }
+        val samples = LumaGridSampler.sample(image)
+        val measured = samples?.let { GeometryMeasure.measure(it).forViewer(frontCamera()) }
         // ML Kit's adapter already returns unrotated buffer coordinates.
         val source = ImageProxyTransformFactory().getOutputTransform(image)
         val width = image.width
@@ -188,7 +190,15 @@ class FrameCameraController(context: Context) {
                 image.imageInfo.rotationDegrees,
             )
         }
-        val scene = ImageSceneSampler.read(image, upright)?.copy(geometry = measured, shapeOverlap = overlap)
+        val subjectRect = upright?.let { FrameRect(it.left, it.top, it.right, it.bottom) }
+        val lighting = samples?.let {
+            LightingAnalyzer.measure(it, GeometryMeasure.COLUMNS, GeometryMeasure.ROWS, subjectRect)
+        }
+        val scene = ImageSceneSampler.read(image, upright)?.copy(
+            geometry = measured,
+            shapeOverlap = overlap,
+            lighting = lighting,
+        )
         if (scene != null && sceneLutAllowed) suggestedLutId = scene.lookId
         mainHandler.post {
             if (!running || token != generation) return@post
@@ -245,11 +255,28 @@ class FrameCameraController(context: Context) {
                         geometry.copy(detected = null, leveled = null)
                     }
                 }
-                onGuide(guide, mapped, lines, null, subjectTracker.hasSelection)
+                val lightingMap = scene?.lighting?.let { read ->
+                    if (preview != null && target != null) {
+                        AnalysisCoordinateMapper.mapLighting(
+                            source,
+                            target,
+                            width,
+                            height,
+                            preview.width,
+                            preview.height,
+                            read,
+                            rotation,
+                        )
+                    } else {
+                        null
+                    }
+                }
+                onGuide(guide, mapped, lines, lightingMap, null, subjectTracker.hasSelection)
             } catch (error: Exception) {
                 Log.w("FrameAI", "Preview mapping unavailable", error)
                 onGuide(
                     staticTargetGuide(),
+                    null,
                     null,
                     null,
                     "The framing guide could not align with the preview. Reopen the camera to retry.",
