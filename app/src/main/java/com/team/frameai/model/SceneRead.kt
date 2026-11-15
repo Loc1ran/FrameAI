@@ -1,5 +1,7 @@
 package com.team.frameai.model
 
+import com.team.frameai.guide.LightingRead
+
 /**
  * A coarse read of the current frame, outside the face.
  * Luma is 0..1. Warmth is negative for cool light and positive for warm light.
@@ -17,6 +19,8 @@ data class SceneRead(
     val geometry: com.team.frameai.guide.SceneGeometry? = null,
     /** Highest intersection-over-union between detected object boxes. Zero when unknown. */
     val shapeOverlap: Float = 0f,
+    /** Grid measurement of brightness. Null when the frame could not be sampled. */
+    val lighting: LightingRead? = null,
 ) {
     fun hasSideBias(): Boolean = kotlin.math.abs(leftLuma - rightLuma) > SIDE_BIAS
 

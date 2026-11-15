@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.team.frameai.guide.FrameRect
 import com.team.frameai.guide.GeometryCoach
+import com.team.frameai.guide.LightingAdviceEngine
 import com.team.frameai.guide.GuidePicture
 import com.team.frameai.guide.NormLine
 import com.team.frameai.guide.SceneGeometry
@@ -45,6 +46,13 @@ fun GuideOverlay(
                 drawLine(FrameLine, Offset(0f, y), Offset(w, y), 1.dp.toPx())
             }
             if (guide == null) return@Canvas
+            if (LightingAdviceEngine.isCue(guide.message)) {
+                val picture = GuidePicture.of(guide, area)
+                if (area != null && area.width > 0.02f && area.height > 0.02f) {
+                    drawSolid(picture.current, FramePaper)
+                }
+                return@Canvas
+            }
             val geometryCue = guide.message == GeometryCoach.ROTATE_CLOCKWISE ||
                 guide.message == GeometryCoach.ROTATE_COUNTERCLOCKWISE ||
                 guide.message == GeometryCoach.CENTER_ANGLE ||

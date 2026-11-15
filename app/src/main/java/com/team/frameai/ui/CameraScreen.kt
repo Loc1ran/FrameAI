@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.team.frameai.guide.CompositionMode
 import com.team.frameai.guide.FrameRatio
 import com.team.frameai.guide.SceneComposition
+import com.team.frameai.guide.LightingMap
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.BuildConfig
 import com.team.frameai.camera.*
@@ -69,6 +70,8 @@ fun CameraScreen(
     var area by remember { mutableStateOf<FaceBoxNormalized?>(null) }
     var live by remember { mutableStateOf<LiveGuide?>(null) }
     var geometry by remember { mutableStateOf<SceneGeometry?>(null) }
+    var lightingMap by remember { mutableStateOf<LightingMap?>(null) }
+    var showLightingMap by rememberSaveable { mutableStateOf(false) }
     var picked by remember { mutableStateOf(false) }
     var tapMark by remember { mutableStateOf<Offset?>(null) }
     var trackingError by remember { mutableStateOf<String?>(null) }
@@ -98,6 +101,7 @@ fun CameraScreen(
                 area = null
                 live = null
                 geometry = null
+                lightingMap = null
                 trackingError = null
                 granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
             } else if (event == Lifecycle.Event.ON_PAUSE) {
@@ -107,6 +111,7 @@ fun CameraScreen(
                 area = null
                 live = null
                 geometry = null
+                lightingMap = null
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -116,11 +121,12 @@ fun CameraScreen(
     DisposableEffect(lifecycleOwner, granted, faceDetector, compositionGuide) {
         controller.detector = faceDetector
         controller.compositionGuide = compositionGuide
-        controller.onGuide = { next, box, lines, failure, manual ->
+        controller.onGuide = { next, box, lines, light, failure, manual ->
             if (resumed) {
                 live = next
                 area = box
                 geometry = lines
+                lightingMap = light
                 picked = manual
                 areaAt = SystemClock.elapsedRealtime()
                 trackingError = failure
@@ -179,8 +185,8 @@ fun CameraScreen(
             FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
         CompositionMode.ACTION -> FramingHint(
             "Capture the movement",
-            if (cloudOn && actionClient.enabled) "One tap captures five frames. AI keeps the strongest action moment."
-            else "One tap captures five frames. The phone keeps the sharpest frame.",
+            if (cloudOn && actionClient.enabled) "Use bright light. A fast shutter captures eight frames; AI checks subject sharpness."
+            else "Use bright light. Eight fast-shutter shots, ranked by overall detail. AI can check the moving subject.",
             "⚡",
         )
         CompositionMode.SUBJECT ->
@@ -198,6 +204,7 @@ fun CameraScreen(
             area = null
             live = null
             geometry = null
+            lightingMap = null
             tapMark = null
         }
         val preview: @Composable (Modifier) -> Unit = { modifier ->
@@ -214,6 +221,7 @@ fun CameraScreen(
                     },
                     update = { controller.previewView = it },
                 )
+                if (mode == CompositionMode.SUBJECT && showLightingMap) LightingOverlay(lightingMap, guided)
                 when (mode) {
                     CompositionMode.SCENE -> SceneOverlay(null, guided, settled)
                     CompositionMode.SUBJECT -> GuideOverlay(live, area, guided, geometry)
@@ -240,7 +248,7 @@ fun CameraScreen(
                     when {
                         !guided -> "FREE FRAME"
                         mode == CompositionMode.SCENE -> "SCENE · ACTION + SURROUNDINGS"
-                        mode == CompositionMode.ACTION -> "ACTION · FIVE-FRAME BURST"
+                        mode == CompositionMode.ACTION -> "ACTION · EIGHT-FRAME BURST"
                         trackingError != null -> "TRACKING UNAVAILABLE"
                         picked -> "YOUR SUBJECT"
                         area != null -> "SUBJECT TRACKED"
@@ -276,24 +284,34 @@ fun CameraScreen(
                             files = files,
                             onSaved = { saved ->
                                 scope.launch {
-                                    val selected = try {
-                                        val aiPick = if (cloudOn) actionClient.choose(saved) else null
-                                        aiPick?.takeIf { it.source == "gemini" }
-                                            ?.index?.takeIf { it in saved.indices }
-                                            ?: actionClient.localBest(saved)
+                                    try {
+                                        val selected = if (cloudOn) {
+                                            val pick = actionClient.choose(saved)
+                                            if (pick == null || pick.source != "gemini") {
+                                                error = "AI could not check this burst. Retry, or turn AI off for local selection. Originals are retained in app storage."
+                                                return@launch
+                                            }
+                                            if (!pick.usable) {
+                                                error = "No clear action shot: ${pick.reason} Try brighter light and keep the subject in focus. Originals are retained in app storage."
+                                                return@launch
+                                            }
+                                            pick.index
+                                        } else actionClient.localBest(saved)
+                                        val chosen = saved[selected]
+                                        onCaptured(chosen, stamp, controller.suggestedLutId, null)
+                                        saved.filterIndexed { index, _ -> index != selected }
+                                            .forEach(File::delete)
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
                                     } catch (_: Exception) {
-                                        saved.size / 2
-                                    }.coerceIn(saved.indices)
-                                    val chosen = saved[selected]
-                                    saved.filterIndexed { index, _ -> index != selected }
-                                        .forEach(File::delete)
-                                    capturing = false
-                                    onCaptured(chosen, stamp, controller.suggestedLutId, null)
+                                        error = "Could not select a frame. Originals are retained in app storage; please retry."
+                                    } finally {
+                                        capturing = false
+                                    }
                                 }
                             },
                             onError = { message ->
                                 capturing = false
-                                files.forEach(File::delete)
                                 error = message
                             },
                         )
@@ -315,6 +333,7 @@ fun CameraScreen(
             CameraToolbar(
                 mode, frameRatio, guided, cloudOn, client.enabled, orientationDegrees,
                 onMode = { choice ->
+                    if (capturing) return@CameraToolbar
                     if (choice != CompositionMode.SUBJECT) controller.clearSubjectSelection()
                     mode = choice
                     area = null
@@ -323,9 +342,11 @@ fun CameraScreen(
                     aiFailed = false
                     aiReply = null
                 },
-                onRatio = { ratioName = it.name },
+                onRatio = { if (!capturing) ratioName = it.name },
                 onGuide = { guided = !guided },
-                onCloud = { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ },
+                onCloud = { if (!capturing) { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ } },
+                showLightingMap = showLightingMap,
+                onLightingMap = { showLightingMap = !showLightingMap },
             )
             if (granted) {
                 preview(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp))
@@ -359,6 +380,8 @@ private fun CameraToolbar(
     onRatio: (FrameRatio) -> Unit,
     onGuide: () -> Unit,
     onCloud: () -> Unit,
+    showLightingMap: Boolean,
+    onLightingMap: () -> Unit,
 ) {
     var menu by remember { mutableStateOf<String?>(null) }
     Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 12.dp).testTag("cameraToolbar"),
@@ -407,6 +430,8 @@ private fun CameraToolbar(
                 CameraLabel(orientationDegrees, Modifier.width(if (orientationDegrees % 180 == 0) 240.dp else 208.dp)) { Column(Modifier.width(240.dp)) {
                 DropdownMenuItem(text = { Text(if (guided) "Turn guide off" else "Turn guide on") },
                     onClick = { onGuide(); menu = null })
+                DropdownMenuItem(text = { Text(if (showLightingMap) "Hide lighting map" else "Show lighting map") },
+                    onClick = { onLightingMap(); menu = null })
                 if (cloudAvailable) DropdownMenuItem(text = { Column {
                     Text(if (cloudOn) "Turn AI off" else "Turn AI on")
                     Text("Shares preview images while on", fontSize = 12.sp)
@@ -473,7 +498,7 @@ private fun CaptureDeck(
             }
             GuidanceCard(hint)
             if (mode == CompositionMode.ACTION && capturing) {
-                Text("Capturing five frames and choosing the best moment…",
+                Text("Metering light, capturing eight frames, then checking the burst…",
                     color = FrameGold, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             }
         } else {
@@ -535,7 +560,7 @@ private fun modeDescription(mode: CompositionMode): String = when (mode) {
     CompositionMode.ACTION -> "Burst and keep the best moment"
 }
 
-private const val ACTION_BURST_SIZE = 5
+private const val ACTION_BURST_SIZE = 8
 
 @Composable
 private fun GuidanceCard(hint: FramingHint) {

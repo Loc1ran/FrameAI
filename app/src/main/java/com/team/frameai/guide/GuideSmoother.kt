@@ -19,6 +19,7 @@ class GuideSmoother(
     private var smoothed: FaceBoxNormalized? = null
     private var lastEmitMs: Long = Long.MIN_VALUE
     private var lastGuide: LiveGuide? = null
+    private val lightingHold = LightingHold()
 
     fun update(
         face: FaceBoxNormalized?,
@@ -29,7 +30,7 @@ class GuideSmoother(
         val blended = blend(face)
         if (blended == null) {
             stabilizer.clear()
-            return publish(engine.advise(null, steady, scene), nowMs)
+            return publish(applyLighting(engine.advise(null, steady, scene), scene), nowMs)
         }
         val natural = engine.advise(blended, steady, scene)
         val stable = stabilizer.choose(
@@ -53,7 +54,24 @@ class GuideSmoother(
             val kept = lastGuide
             if (kept != null && GeometryCoach.isCue(kept.message)) return kept
         }
-        return publish(framing, nowMs)
+        return publish(applyLighting(framing, scene), nowMs)
+    }
+
+    private fun applyLighting(framing: Framing, scene: SceneRead?): Framing {
+        val blocked = framing.strategy == CompositionStrategy.BREATHING_ROOM ||
+            GeometryCoach.isCue(framing.guide.message)
+        if (blocked) return framing
+        val persisted = lightingHold.update(LightingAdviceEngine.diagnose(scene?.lighting))
+        val advice = persisted?.let { LightingAdviceEngine.present(it, framing) } ?: return framing
+        return framing.copy(
+            guide = framing.guide.copy(
+                kind = GuideEngine.KIND_ALIGN,
+                message = advice.message,
+                isReady = false,
+                zoom = GuideEngine.ZOOM_HOLD,
+                targetZoomRatio = 1.0,
+            ),
+        )
     }
 
     fun lastKind(): String? = lastGuide?.kind
