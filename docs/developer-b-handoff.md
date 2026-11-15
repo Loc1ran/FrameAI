@@ -26,7 +26,8 @@ Follow `docs/three-developer-gemini-coach-plan.md`. Do not bring back the fixed 
 `GuideEngine.suggest(faceBox, steady, scene)` returns one `LiveGuide`. `kind` stays `ALIGN_SUBJECT`, `READY`, or `NO_FACE`. `source` for this path stays `offline_rules`.
 
 - A person can sit on either third. Size and clipped edges are judged before placement.
-- No person is still a picture. A horizon, a brighter side, or an even frame each get their own guide.
+- With no person, a detected horizon uses the nearest grid line. Without a horizon, the frame is ready even when one side is brighter; the overlay shows the green check. Brightness still influences placement when a face is present.
+- Scene warmth selects `warm_film` or `cool_cinema` through `SceneRead.lookId`, which the camera passes to the capture/review flow.
 - The preview draws a dashed goal, a solid current frame, and an arrow. It does not print `message`.
 - `GuideSmoother` is not wired in `MainActivity`. Do not add "move left" or "move right" to any text that still exists in JSON.
 

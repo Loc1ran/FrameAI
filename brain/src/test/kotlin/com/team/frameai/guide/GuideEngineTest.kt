@@ -97,11 +97,38 @@ class GuideEngineTest {
     }
 
     @Test
-    fun aBrightSideWithoutAPersonStillPlacesTheSubject() {
-        val brightLeft = SceneRead(leftLuma = 0.8f, rightLuma = 0.3f, warmth = 0.0f)
-        val guide = engine.suggest(null, scene = brightLeft)
-        assertEquals(0.67, guide.targetX, 0.0001)
-        assertEquals(GuideEngine.PLACE_ANY_MESSAGE, guide.message)
+    fun aBrightSideWithoutAPersonOrHorizonIsReady() {
+        for ((left, right) in listOf(0.8f to 0.3f, 0.3f to 0.8f)) {
+            val scene = SceneRead(leftLuma = left, rightLuma = right, warmth = 0f)
+            val guide = engine.suggest(null, scene = scene)
+            assertTrue(scene.hasSideBias())
+            assertTrue(guide.isReady)
+            assertEquals(GuideEngine.KIND_READY, guide.kind)
+            assertEquals(0.5, guide.targetX)
+            assertNull(guide.subjectX)
+            assertNull(guide.subjectY)
+        }
+    }
+
+    @Test
+    fun brightSkyStillUsesHorizonGuidanceBeforeReadyFallback() {
+        val sky = SceneRead(0.8f, 0.4f, 0f, topLuma = 0.9f,
+            bottomLuma = 0.3f, horizonY = 0.5f)
+        val guide = engine.suggest(null, scene = sky)
+        assertFalse(guide.isReady)
+        assertEquals(GuideEngine.KIND_ALIGN, guide.kind)
+        assertNull(guide.subjectX)
+        assertEquals(0.5, guide.subjectY)
+        assertEquals(0.33, guide.targetY, 0.0001)
+    }
+
+    @Test
+    fun openScenesChooseTheLookFromLightWhileStayingReady() {
+        for ((warmth, look) in listOf(0.2f to LutIds.WARM_FILM, -0.2f to LutIds.COOL_CINEMA)) {
+            val scene = SceneRead(0.8f, 0.3f, warmth)
+            assertTrue(engine.suggest(null, scene = scene).isReady)
+            assertEquals(look, scene.lookId)
+        }
     }
 
     @Test

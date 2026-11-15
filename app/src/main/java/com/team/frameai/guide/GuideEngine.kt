@@ -44,7 +44,6 @@ class GuideEngine(
         if (scene == null) return emptyFrame()
         val horizon = scene.horizonY
         if (scene.hasHorizon() && horizon != null) return horizonFrame(scene, horizon)
-        if (scene.hasSideBias()) return openSubject(scene)
         return readyScene(scene, OPEN_READY)
     }
 
@@ -78,20 +77,6 @@ class GuideEngine(
             subjectX = null,
             subjectY = horizon.toDouble(),
             isReady = ready,
-            source = AdviceSource.OFFLINE_RULES.wire,
-        )
-    }
-
-    private fun openSubject(scene: SceneRead): LiveGuide {
-        val targetX = if (scene.leftLuma > scene.rightLuma) THIRD_HI else THIRD_LO
-        return LiveGuide(
-            kind = KIND_ALIGN,
-            message = PLACE_ANY_MESSAGE,
-            targetX = targetX.toDouble(),
-            targetY = 0.5,
-            subjectX = null,
-            subjectY = null,
-            isReady = false,
             source = AdviceSource.OFFLINE_RULES.wire,
         )
     }
