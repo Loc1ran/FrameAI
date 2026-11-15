@@ -172,7 +172,6 @@ fun CameraScreen(
             tapMark = null
         }
     }
-    LaunchedEffect(frameRatio) { controller.setFrameRatio(frameRatio) }
     LaunchedEffect(mode) { controller.setActionMode(mode == CompositionMode.ACTION) }
     val sceneAdvice = SceneComposition.suggest(aiReply, cloudOn, client.enabled, aiFailed)
     val hint = when (mode) {
@@ -194,7 +193,7 @@ fun CameraScreen(
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(FrameInk).safeDrawingPadding()) {
-        val deckHeight = maxHeight * 0.42f
+        val deckHeight = maxHeight * 0.36f
         LaunchedEffect(frameRatio) {
             area = null
             live = null
@@ -486,21 +485,22 @@ private fun CaptureDeck(
                 if (mode == CompositionMode.ACTION) "AI BEST SHOT · compares the burst"
                 else "AI SUGGESTION · same move as the guide",
                 color = FrameGold,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(top = 6.dp),
+                fontSize = 9.sp,
+                modifier = Modifier.padding(top = 4.dp),
             )
             if (mode == CompositionMode.SUBJECT) {
                 Text(
                     matchingSuggestion(hint.title, aiReply?.message, aiForInstruction),
                     color = FrameMuted,
-                    fontSize = 12.sp,
-                    maxLines = 3,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 2,
                 )
             }
             if (mode == CompositionMode.ACTION) {
                 Text("After capture, AI checks timing, sharpness, clipping, and composition.",
-                    color = FrameMuted, fontSize = 12.sp)
-            } else if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 12.sp)
+                    color = FrameMuted, fontSize = 11.sp, maxLines = 2)
+            } else if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 11.sp, maxLines = 2)
         }
         error?.let { Text(it, color = FrameGold, fontSize = 12.sp) }
         }
@@ -539,16 +539,16 @@ private const val ACTION_BURST_SIZE = 5
 
 @Composable
 private fun GuidanceCard(hint: FramingHint) {
-    Row(Modifier.fillMaxWidth().background(FrameSurface, RoundedCornerShape(16.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(FrameSurface, RoundedCornerShape(12.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(hint.symbol,
-            color = if (hint.aligned) FrameReady else FrameGold, fontSize = 32.sp,
-            modifier = Modifier.width(44.dp))
+            color = if (hint.aligned) FrameReady else FrameGold, fontSize = 24.sp,
+            modifier = Modifier.width(32.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 hint.title,
-                color = FramePaper, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                color = FramePaper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp,
             )
-            Text(hint.detail, color = FrameMuted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(hint.detail, color = FrameMuted, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
