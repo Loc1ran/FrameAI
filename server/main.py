@@ -173,6 +173,7 @@ async def action_best_shot(
     if mode == "mock":
         return {
             "selectedIndex": len(frames) // 2,
+            "usable": False,
             "reason": "Demo selection uses the middle burst frame; no image analysis was performed.",
             "source": "demo_mock",
         }

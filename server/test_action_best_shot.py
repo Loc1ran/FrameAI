@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+from gemini_client import normalize_action_pick
 
 JPEG = b"\xff\xd8\xff\xd9"
 
@@ -26,6 +27,7 @@ def test_mock_selects_valid_middle_frame_without_claiming_ai(client):
     assert response.status_code == 200
     assert response.json()["selectedIndex"] == 2
     assert response.json()["source"] == "demo_mock"
+    assert response.json()["usable"] is False
     assert "no image analysis" in response.json()["reason"]
 
 
@@ -42,7 +44,7 @@ def test_routes_all_frames_to_gemini(client, monkeypatch):
 
     def choose(images, key, model):
         received.append(len(images))
-        return {"selectedIndex": 4, "reason": "Strongest action moment.", "source": "gemini"}
+        return {"selectedIndex": 4, "usable": True, "reason": "Strongest action moment.", "source": "gemini"}
 
     monkeypatch.setattr(main, "select_action_best", choose)
     response = client.post(
@@ -53,3 +55,25 @@ def test_routes_all_frames_to_gemini(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["selectedIndex"] == 4
     assert received == [5]
+
+
+def test_eight_candidates_are_supported(client):
+    response = client.post("/v1/action-best-shot", headers={"X-Demo-Token": "localtest"}, files=burst(8))
+    assert response.status_code == 200
+
+
+def test_preserves_all_blurred_verdict():
+    result = normalize_action_pick({"selectedIndex": 2, "usable": False, "reason": "Bottle is blurred in every frame."}, 8)
+    assert result["usable"] is False
+    assert result["selectedIndex"] == 2
+
+
+@pytest.mark.parametrize("patch", [
+    {"usable": None}, {"usable": "true"}, {"selectedIndex": True},
+    {"selectedIndex": -1}, {"selectedIndex": 8}, {"reason": ""},
+])
+def test_rejects_unreliable_selection(patch):
+    payload = {"selectedIndex": 0, "usable": True, "reason": "Sharp moving subject."}
+    payload.update(patch)
+    with pytest.raises(ValueError):
+        normalize_action_pick(payload, 8)

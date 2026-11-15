@@ -3,6 +3,8 @@ package com.team.frameai.ui
 import com.team.frameai.camera.ImageSaver
 import com.team.frameai.guide.ActionFrameScore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
@@ -12,7 +14,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
-data class ActionPick(val index: Int, val reason: String, val source: String)
+data class ActionPick(val index: Int, val reason: String, val source: String, val usable: Boolean)
 
 /** Sends one small copy of each burst frame. Originals remain on the phone. */
 class ActionBestShotClient(
@@ -22,7 +24,7 @@ class ActionBestShotClient(
     val enabled: Boolean get() = baseUrl.isNotBlank() && demoToken.isNotBlank()
 
     suspend fun choose(files: List<File>): ActionPick? {
-        if (!enabled || files.isEmpty()) return null
+        if (!enabled || files.size < 2) return null
         return try {
             val images = withContext(Dispatchers.Default) {
                 files.mapNotNull { file ->
@@ -33,6 +35,10 @@ class ActionBestShotClient(
             }
             if (images.size != files.size) return null
             withTimeout(20_000) { withContext(Dispatchers.IO) { post(images) } }
+        } catch (_: TimeoutCancellationException) {
+            null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             null
         }
@@ -40,7 +46,8 @@ class ActionBestShotClient(
 
     suspend fun localBest(files: List<File>): Int = withContext(Dispatchers.Default) {
         val scores = files.map { file ->
-            val bitmap = ImageSaver.decodeOriented(file.absolutePath, 256) ?: return@map 0.0
+            val bitmap = ImageSaver.decodeOriented(file.absolutePath, 256)
+                ?: error("Could not decode a burst frame")
             try {
                 val width = bitmap.width
                 val height = bitmap.height
@@ -79,10 +86,13 @@ class ActionBestShotClient(
             val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
             val index = json.optInt("selectedIndex", -1)
             if (index !in images.indices) return null
+            // Older servers cannot certify that any frame is usable.
+            val usable = json.opt("usable") as? Boolean ?: return null
             return ActionPick(
                 index = index,
                 reason = json.optString("reason", "Selected from the action burst."),
-                source = json.optString("source", "gemini"),
+                source = json.optString("source", ""),
+                usable = usable,
             )
         } finally {
             connection.disconnect()
