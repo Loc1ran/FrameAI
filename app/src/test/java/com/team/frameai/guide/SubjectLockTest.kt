@@ -44,6 +44,18 @@ class SubjectLockTest {
         assertEquals(3, lock.choose(listOf(monitor), 1_801)?.id)
     }
 
+    @Test fun aTapSelectsThatObjectInsteadOfTheNearestCenter() {
+        val bottle = candidate(7, 0.8f, 0.7f, 0.16f, 0.24f)
+        val monitor = candidate(3, 0.2f, 0.3f, 0.2f, 0.3f)
+        val lock = SubjectLock()
+        lock.select(3, 0)
+        assertEquals(3, lock.choose(listOf(bottle, monitor), 100)?.id)
+        assertNull(lock.choose(listOf(bottle), 200))
+        assertTrue(lock.hasSelection())
+        assertEquals(7, lock.choose(listOf(bottle), 1_800)?.id)
+        assertFalse(lock.hasSelection())
+    }
+
     @Test fun rejectsInvalidAndDegenerateBounds() {
         listOf(
             FrameRect(Float.NaN, 0f, 0.5f, 0.5f),

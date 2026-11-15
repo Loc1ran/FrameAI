@@ -12,6 +12,9 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,7 +24,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +40,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.team.frameai.guide.CompositionMode
+import com.team.frameai.guide.FrameRatio
 import com.team.frameai.guide.SceneComposition
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.BuildConfig
@@ -50,6 +57,7 @@ fun CameraScreen(
     faceDetector: PrimaryFaceDetector?,
     compositionGuide: CompositionGuide?,
     onCaptured: (File, String, String, LiveGuide?) -> Unit,
+    orientationDegrees: Int = 0,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -61,6 +69,8 @@ fun CameraScreen(
     var area by remember { mutableStateOf<FaceBoxNormalized?>(null) }
     var live by remember { mutableStateOf<LiveGuide?>(null) }
     var geometry by remember { mutableStateOf<SceneGeometry?>(null) }
+    var picked by remember { mutableStateOf(false) }
+    var tapMark by remember { mutableStateOf<Offset?>(null) }
     var trackingError by remember { mutableStateOf<String?>(null) }
     var areaAt by remember { mutableLongStateOf(0L) }
     var capturing by remember { mutableStateOf(false) }
@@ -71,6 +81,8 @@ fun CameraScreen(
     var aiReply by remember { mutableStateOf<LiveCoach?>(null) }
     var aiForInstruction by remember { mutableStateOf<String?>(null) }
     var aiStatus by remember { mutableStateOf("Waiting for a scene suggestion…") }
+    var ratioName by rememberSaveable { mutableStateOf(FrameRatio.FOUR_THREE.name) }
+    val frameRatio = FrameRatio.entries.firstOrNull { it.name == ratioName } ?: FrameRatio.FULL
     var resumed by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val controller = remember { FrameCameraController(context.applicationContext) }
@@ -103,11 +115,12 @@ fun CameraScreen(
     DisposableEffect(lifecycleOwner, granted, faceDetector, compositionGuide) {
         controller.detector = faceDetector
         controller.compositionGuide = compositionGuide
-        controller.onGuide = { next, box, lines, failure ->
+        controller.onGuide = { next, box, lines, failure, manual ->
             if (resumed) {
                 live = next
                 area = box
                 geometry = lines
+                picked = manual
                 areaAt = SystemClock.elapsedRealtime()
                 trackingError = failure
             }
@@ -152,6 +165,13 @@ fun CameraScreen(
     LaunchedEffect(aiReplyAt) {
         if (aiReply != null) { delay(8_000); aiReply = null; aiStatus = "Waiting for a fresh suggestion…" }
     }
+    LaunchedEffect(tapMark) {
+        if (tapMark != null) {
+            delay(700)
+            tapMark = null
+        }
+    }
+    LaunchedEffect(frameRatio) { controller.setFrameRatio(frameRatio) }
     val sceneAdvice = SceneComposition.suggest(aiReply, cloudOn, client.enabled, aiFailed)
     val hint = if (mode == CompositionMode.SCENE) {
         FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
@@ -164,30 +184,16 @@ fun CameraScreen(
         if (hint.aligned && guided) { delay(600); settled = true }
     }
 
-    Column(Modifier.fillMaxSize().background(FrameInk).safeDrawingPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("FRAMEAI", color = FramePaper, fontSize = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Text("FRAME  /  CAPTURE  /  COLOR", color = FrameMuted, fontSize = 9.sp, letterSpacing = 1.sp)
-            }
-            TextButton(onClick = { guided = !guided }) { Text(if (guided) "Guide on" else "Guide off") }
-            if (client.enabled) TextButton(onClick = { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ }) {
-                Text(if (cloudOn) "AI on" else "AI off")
-            }
+    BoxWithConstraints(Modifier.fillMaxSize().background(FrameInk).safeDrawingPadding()) {
+        val deckHeight = maxHeight * 0.42f
+        LaunchedEffect(frameRatio) {
+            area = null
+            live = null
+            geometry = null
+            tapMark = null
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            CompositionMode.entries.forEach { choice ->
-                FilterChip(selected = mode == choice, onClick = {
-                    mode = choice
-                    area = null
-                    modeGeneration++
-                    aiFailed = false
-                    aiReply = null
-                }, label = { Text(if (choice == CompositionMode.SUBJECT) "Subject" else "Scene") })
-            }
-        }
-        if (granted) {
-            Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(20.dp)).background(FrameInk)) {
+        val preview: @Composable (Modifier) -> Unit = { modifier ->
+            FrameViewport(frameRatio, false, modifier) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { viewContext ->
@@ -202,84 +208,261 @@ fun CameraScreen(
                 )
                 if (mode == CompositionMode.SCENE) SceneOverlay(null, guided, settled)
                 else GuideOverlay(live, area, guided, geometry)
+                if (mode == CompositionMode.SUBJECT) {
+                    Box(
+                        Modifier.fillMaxSize().pointerInput(mode) {
+                            detectTapGestures { offset ->
+                                if (size.width <= 0f || size.height <= 0f) return@detectTapGestures
+                                tapMark = offset
+                                controller.selectSubjectAt(offset.x / size.width, offset.y / size.height)
+                            }
+                        },
+                    )
+                }
+                tapMark?.let { mark ->
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        drawCircle(FrameGold, radius = 18.dp.toPx(), center = mark, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+                    }
+                }
+                CameraLabel(orientationDegrees, Modifier.align(Alignment.TopStart).padding(12.dp)) {
                 Text(
                     when {
                         !guided -> "FREE FRAME"
                         mode == CompositionMode.SCENE -> "SCENE · ACTION + SURROUNDINGS"
                         trackingError != null -> "TRACKING UNAVAILABLE"
+                        picked -> "YOUR SUBJECT"
                         area != null -> "SUBJECT TRACKED"
                         else -> "LOOKING FOR A SUBJECT"
                     },
                     color = if (mode == CompositionMode.SCENE) FramePaper else if (area != null) FrameReady else FramePaper, fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+                    modifier = Modifier
                         .background(FrameInk.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(8.dp),
                 )
-            }
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp)) {
-                if (guided) {
-                    Text(if (mode == CompositionMode.SCENE) "01   SUBJECT + SURROUNDINGS" else "01   FRAME YOUR SUBJECT", color = FrameMuted, fontSize = 10.sp, letterSpacing = 1.sp,
-                        modifier = Modifier.padding(bottom = 8.dp))
-                    GuidanceCard(hint)
-                } else {
-                    Text("Frame it your way", color = FramePaper, fontSize = 20.sp)
-                    Text("The guide is off. You can take a photo at any time.", color = FrameMuted, fontSize = 12.sp)
                 }
-                if (cloudOn) {
-                    Text("AI SUGGESTION · same move as the guide", color = FrameGold, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
-                    if (mode == CompositionMode.SUBJECT) {
-                        Text(
-                            matchingSuggestion(hint.title, aiReply?.message, aiForInstruction),
-                            color = FrameMuted,
-                            fontSize = 12.sp,
-                            maxLines = 3,
-                        )
-                    }
-                    if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 12.sp)
-                }
-                error?.let { Text(it, color = FrameGold, fontSize = 12.sp) }
-                Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(
-                        modifier = Modifier.weight(1f),
-                        enabled = !capturing && controller.canApplyZoom(0.8f),
-                        onClick = { controller.applyZoom(0.8f) },
-                    ) { Text("Zoom −") }
-                    Box(
-                        Modifier.size(70.dp).border(2.dp, if (settled) FrameReady else FramePaper, CircleShape)
-                            .padding(6.dp).clip(CircleShape).background(if (capturing) FrameMuted else FramePaper)
-                            .semantics { contentDescription = "Take photo" }
-                            .clickable(enabled = !capturing, role = Role.Button) {
-                                capturing = true
-                                error = null
-                                val stamp = PhotoNames.timestamp()
-                                val file = ImageSaver.createOriginal(context, stamp)
-                                val fresh = mode == CompositionMode.SUBJECT && guided &&
-                                    area != null && SystemClock.elapsedRealtime() - areaAt < 1_500
-                                val captureGuide = if (fresh) live else null
-                                controller.takePicture(file,
-                                    onSaved = { capturing = false; onCaptured(file, stamp, controller.suggestedLutId, captureGuide) },
-                                    onError = { capturing = false; file.delete(); error = it },
-                                )
-                            },
-                    )
-                    TextButton(
-                        modifier = Modifier.weight(1f),
-                        enabled = !capturing && controller.canApplyZoom(1.25f),
-                        onClick = { controller.applyZoom(1.25f) },
-                    ) { Text("Zoom +") }
-                }
-                Text("Take a photo whenever you like", color = FrameMuted, fontSize = 11.sp,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp))
-            }
-        } else {
-            Column(Modifier.weight(1f).padding(28.dp), verticalArrangement = Arrangement.Center) {
-                Text("Start with your camera", color = FramePaper, fontSize = 28.sp)
-                Text("See your subject, follow one framing cue, then choose a color look.", color = FrameMuted, modifier = Modifier.padding(vertical = 16.dp))
-                Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
-                TextButton(onClick = {
-                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
-                }) { Text("Open settings") }
             }
         }
+        val deck: @Composable (Modifier) -> Unit = { modifier ->
+            CaptureDeck(
+                mode = mode, guided = guided, picked = picked, hint = hint,
+                orientationDegrees = orientationDegrees,
+                cloudOn = cloudOn, aiReply = aiReply, aiForInstruction = aiForInstruction,
+                aiFailed = aiFailed, aiStatus = aiStatus, error = error,
+                capturing = capturing, settled = settled,
+                zoomOutEnabled = !capturing && controller.canApplyZoom(0.8f),
+                zoomInEnabled = !capturing && controller.canApplyZoom(1.25f),
+                onZoomOut = { controller.applyZoom(0.8f) },
+                onZoomIn = { controller.applyZoom(1.25f) },
+                onCapture = {
+                        capturing = true
+                        error = null
+                        val stamp = PhotoNames.timestamp()
+                        val file = ImageSaver.createOriginal(context, stamp)
+                        val fresh = mode == CompositionMode.SUBJECT && guided &&
+                            area != null && SystemClock.elapsedRealtime() - areaAt < 1_500
+                        val captureGuide = if (fresh) live else null
+                        controller.takePicture(file,
+                            onSaved = { capturing = false; onCaptured(file, stamp, controller.suggestedLutId, captureGuide) },
+                            onError = { capturing = false; file.delete(); error = it },
+                        )
+                },
+                modifier = modifier.testTag("cameraControls"),
+            )
+        }
+        Column(Modifier.fillMaxSize()) {
+            CameraToolbar(
+                mode, frameRatio, guided, cloudOn, client.enabled, orientationDegrees,
+                onMode = { choice ->
+                    if (choice != CompositionMode.SUBJECT) controller.clearSubjectSelection()
+                    mode = choice
+                    area = null
+                    picked = choice == CompositionMode.SUBJECT && picked
+                    modeGeneration++
+                    aiFailed = false
+                    aiReply = null
+                },
+                onRatio = { ratioName = it.name },
+                onGuide = { guided = !guided },
+                onCloud = { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ },
+            )
+            if (granted) {
+                preview(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp))
+                deck(Modifier.fillMaxWidth().height(deckHeight)
+                    .padding(horizontal = 20.dp, vertical = 8.dp))
+            } else {
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(28.dp),
+                    verticalArrangement = Arrangement.Center) {
+                    Text("Start with your camera", color = FramePaper, fontSize = 28.sp)
+                    Text("Frame your photo, follow a cue, then choose a color look.",
+                        color = FrameMuted, modifier = Modifier.padding(vertical = 16.dp))
+                    Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
+                    }) { Text("Open settings") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CameraToolbar(
+    mode: CompositionMode,
+    ratio: FrameRatio,
+    guided: Boolean,
+    cloudOn: Boolean,
+    cloudAvailable: Boolean,
+    orientationDegrees: Int,
+    onMode: (CompositionMode) -> Unit,
+    onRatio: (FrameRatio) -> Unit,
+    onGuide: () -> Unit,
+    onCloud: () -> Unit,
+) {
+    var menu by remember { mutableStateOf<String?>(null) }
+    Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 12.dp).testTag("cameraToolbar"),
+        verticalAlignment = Alignment.CenterVertically) {
+        CameraLabel(orientationDegrees, Modifier.weight(1f).fillMaxHeight()) {
+            Text("FRAMEAI", color = FramePaper, fontSize = 15.sp,
+                fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+        Box {
+            TextButton(onClick = { menu = "mode" }, modifier = Modifier.width(80.dp).fillMaxHeight()) {
+                CameraLabel(orientationDegrees, Modifier.fillMaxSize()) {
+                    Text(if (mode == CompositionMode.SUBJECT) "Subject" else "Scene", fontSize = 13.sp)
+                }
+            }
+            DropdownMenu(expanded = menu == "mode", onDismissRequest = { menu = null }) {
+                CameraLabel(orientationDegrees, Modifier.width(if (orientationDegrees % 180 == 0) 240.dp else 208.dp)) { Column(Modifier.width(240.dp)) {
+                CompositionMode.entries.forEach { choice ->
+                    DropdownMenuItem(text = { Column {
+                        Text(if (choice == CompositionMode.SUBJECT) "Subject" else "Scene")
+                        Text(if (choice == CompositionMode.SUBJECT) "Follow a person or object" else "Consider the surroundings", fontSize = 12.sp)
+                    } }, onClick = { onMode(choice); menu = null })
+                }
+                } }
+            }
+        }
+        Box {
+            TextButton(onClick = { menu = "ratio" }, modifier = Modifier.width(64.dp).fillMaxHeight().semantics { contentDescription = "Photo shape" }) {
+                CameraLabel(orientationDegrees, Modifier.fillMaxSize()) { Text(ratio.label) }
+            }
+            DropdownMenu(expanded = menu == "ratio", onDismissRequest = { menu = null }) {
+                CameraLabel(orientationDegrees, Modifier.width(if (orientationDegrees % 180 == 0) 240.dp else 208.dp)) { Column(Modifier.width(240.dp)) {
+                FrameRatio.entries.forEach { choice ->
+                    DropdownMenuItem(
+                        text = { Text(if (choice == FrameRatio.FULL) "Fill available space" else choice.label) },
+                        onClick = { onRatio(choice); menu = null },
+                    )
+                }
+                } }
+            }
+        }
+        Box {
+            TextButton(onClick = { menu = "options" }, modifier = Modifier.width(56.dp).fillMaxHeight().semantics { contentDescription = "Camera options" }) {
+                CameraLabel(orientationDegrees, Modifier.fillMaxSize()) { Text("•••", fontSize = 18.sp) }
+            }
+            DropdownMenu(expanded = menu == "options", onDismissRequest = { menu = null }) {
+                CameraLabel(orientationDegrees, Modifier.width(if (orientationDegrees % 180 == 0) 240.dp else 208.dp)) { Column(Modifier.width(240.dp)) {
+                DropdownMenuItem(text = { Text(if (guided) "Turn guide off" else "Turn guide on") },
+                    onClick = { onGuide(); menu = null })
+                if (cloudAvailable) DropdownMenuItem(text = { Column {
+                    Text(if (cloudOn) "Turn AI off" else "Turn AI on")
+                    Text("Shares preview images while on", fontSize = 12.sp)
+                } }, onClick = { onCloud(); menu = null })
+                } }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun FrameViewport(
+    ratio: FrameRatio,
+    landscape: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val aspect = ratio.previewAspect(landscape)
+        val width = if (aspect == null) maxWidth else minOf(maxWidth, maxHeight * aspect)
+        val height = if (aspect == null) maxHeight else width / aspect
+        Box(
+            Modifier.size(width, height).clip(RoundedCornerShape(16.dp))
+                .background(FrameInk).testTag("cameraPreview"),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun CaptureDeck(
+    mode: CompositionMode,
+    guided: Boolean,
+    picked: Boolean,
+    hint: FramingHint,
+    orientationDegrees: Int,
+    cloudOn: Boolean,
+    aiReply: LiveCoach?,
+    aiForInstruction: String?,
+    aiFailed: Boolean,
+    aiStatus: String,
+    error: String?,
+    capturing: Boolean,
+    settled: Boolean,
+    zoomOutEnabled: Boolean,
+    zoomInEnabled: Boolean,
+    onZoomOut: () -> Unit,
+    onZoomIn: () -> Unit,
+    onCapture: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        CameraLabel(orientationDegrees, Modifier.weight(1f).fillMaxWidth()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        if (guided) {
+            if (mode == CompositionMode.SUBJECT) {
+                Text(
+                    if (picked) "Following your tap. Tap empty space to choose automatically."
+                    else "Tap a subject to choose what to follow.",
+                    color = FrameMuted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+            GuidanceCard(hint)
+        } else {
+            Text("Frame it your way", color = FramePaper, fontSize = 20.sp)
+            Text("The guide is off. You can take a photo at any time.", color = FrameMuted, fontSize = 12.sp)
+        }
+        if (cloudOn) {
+            Text("AI SUGGESTION · same move as the guide", color = FrameGold, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
+            if (mode == CompositionMode.SUBJECT) {
+                Text(
+                    matchingSuggestion(hint.title, aiReply?.message, aiForInstruction),
+                    color = FrameMuted,
+                    fontSize = 12.sp,
+                    maxLines = 3,
+                )
+            }
+            if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 12.sp)
+        }
+        error?.let { Text(it, color = FrameGold, fontSize = 12.sp) }
+        }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(modifier = Modifier.weight(1f), enabled = zoomOutEnabled, onClick = onZoomOut) {
+                CameraLabel(orientationDegrees, Modifier.size(56.dp)) { Text("Zoom −") }
+            }
+            Box(
+                Modifier.size(70.dp).testTag("shutter").border(2.dp, if (settled) FrameReady else FramePaper, CircleShape)
+                    .padding(6.dp).clip(CircleShape).background(if (capturing) FrameMuted else FramePaper)
+                    .semantics { contentDescription = "Take photo" }
+                    .clickable(enabled = !capturing, role = Role.Button) { onCapture() },
+            )
+            TextButton(modifier = Modifier.weight(1f), enabled = zoomInEnabled, onClick = onZoomIn) {
+                CameraLabel(orientationDegrees, Modifier.size(56.dp)) { Text("Zoom +") }
+            }
+        }
+
     }
 }
 
@@ -292,9 +475,9 @@ private fun GuidanceCard(hint: FramingHint) {
         Column(Modifier.weight(1f)) {
             Text(
                 hint.title,
-                color = FramePaper, fontSize = 19.sp, fontWeight = FontWeight.SemiBold,
+                color = FramePaper, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
             )
-            Text(hint.detail, color = FrameMuted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(hint.detail, color = FrameMuted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

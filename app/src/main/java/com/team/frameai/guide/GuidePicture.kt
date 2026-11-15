@@ -15,6 +15,29 @@ data class FrameRect(
     val centerY: Float get() = (top + bottom) / 2f
 }
 
+/** A preview-space box the user can tap to make it the subject. */
+object SubjectTap {
+    private const val NEAREST = 0.18f
+
+    fun choose(subjects: List<TrackCandidate>, x: Float, y: Float): TrackCandidate? {
+        if (x !in 0f..1f || y !in 0f..1f) return null
+        val usable = subjects.filter { it.id != null }
+        val inside = usable.filter { contains(it.box, x, y) }
+        if (inside.isNotEmpty()) return inside.minBy { it.box.width * it.box.height }
+        return usable.minByOrNull { distance(it.box, x, y) }
+            ?.takeIf { distance(it.box, x, y) <= NEAREST * NEAREST }
+    }
+
+    private fun contains(box: FrameRect, x: Float, y: Float): Boolean =
+        x in box.left..box.right && y in box.top..box.bottom
+
+    private fun distance(box: FrameRect, x: Float, y: Float): Float {
+        val dx = box.centerX - x
+        val dy = box.centerY - y
+        return dx * dx + dy * dy
+    }
+}
+
 enum class FrameCue {
     MOVE,
     GROW,

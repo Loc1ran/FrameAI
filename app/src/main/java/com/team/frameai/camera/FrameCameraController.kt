@@ -9,15 +9,20 @@ import androidx.camera.view.TransformExperimental
 import androidx.camera.view.transform.ImageProxyTransformFactory
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.vision.FaceBoxMath
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.team.frameai.guide.FrameRatio
+import com.team.frameai.guide.FrameRect
 import com.team.frameai.guide.GeometryMeasure
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.guide.ShapeOverlap
+import com.team.frameai.guide.SubjectTap
+import com.team.frameai.guide.TrackCandidate
 import com.team.frameai.guide.ZoomLens
 import com.team.frameai.model.LiveGuide
 import com.team.frameai.model.LutIds
@@ -42,7 +47,9 @@ class FrameCameraController(context: Context) {
     @Volatile var detector: PrimaryFaceDetector? = null
     @Volatile var compositionGuide: CompositionGuide? = null
     @Volatile var previewView: androidx.camera.view.PreviewView? = null
-    @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, SceneGeometry?, String?) -> Unit = { _, _, _, _ -> }
+    @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, SceneGeometry?, String?, Boolean) -> Unit =
+        { _, _, _, _, _ -> }
+    private val previewTargets = java.util.concurrent.atomic.AtomicReference<List<TrackCandidate>>(emptyList())
     @Volatile var onFrameJpeg: ((ByteArray) -> Unit)? = null
     @Volatile var captureFrames: Boolean = false
     @Volatile var sceneLutAllowed: Boolean = true
@@ -90,6 +97,7 @@ class FrameCameraController(context: Context) {
                         null,
                         null,
                         "Object detection is unavailable. Reopen the camera to retry; you can still take a photo.",
+                        subjectTracker.hasSelection,
                     )
                 }
             } finally {
@@ -126,10 +134,11 @@ class FrameCameraController(context: Context) {
         if (!running) return
         val token = generation
         val frameAt = SystemClock.elapsedRealtime()
-        val face = detector?.detectPrimaryFace(image)
-        val tracked = if (face == null) subjectTracker.inspect(image) else null
-        val raw = face ?: tracked?.primary
-        val overlap = ShapeOverlap.strongest(tracked?.boxes.orEmpty())
+        val manual = subjectTracker.hasSelection
+        val tracked = subjectTracker.inspect(image)
+        val face = if (manual) null else detector?.detectPrimaryFace(image)
+        val raw = if (manual) tracked.primary else face ?: tracked.primary
+        val overlap = ShapeOverlap.strongest(tracked.boxes)
         val measured = LumaGridSampler.sample(image)?.let { samples ->
             GeometryMeasure.measure(samples).forViewer(frontCamera())
         }
@@ -151,19 +160,36 @@ class FrameCameraController(context: Context) {
             try {
                 val preview = previewView
                 val target = preview?.outputTransform
-                val mapped = if (raw != null && preview != null && target != null &&
-                    SystemClock.elapsedRealtime() - frameAt < 1_500L) {
+                val fresh = preview != null && target != null &&
+                    SystemClock.elapsedRealtime() - frameAt < 1_500L
+                val mapped = if (raw != null && fresh) {
                     AnalysisCoordinateMapper.map(
                         source,
-                        target,
+                        target!!,
                         width,
                         height,
-                        preview.width,
+                        preview!!.width,
                         preview.height,
                         raw,
                         mirroredPreview = frontCamera(),
                     )
                 } else null
+                val choices = if (fresh) {
+                    tracked.subjects.mapNotNull { subject ->
+                        val box = AnalysisCoordinateMapper.map(
+                            source,
+                            target!!,
+                            width,
+                            height,
+                            preview!!.width,
+                            preview.height,
+                            subject.sensor,
+                            mirroredPreview = frontCamera(),
+                        ) ?: return@mapNotNull null
+                        TrackCandidate(subject.id, FrameRect(box.left, box.top, box.right, box.bottom))
+                    }
+                } else emptyList()
+                previewTargets.set(choices)
                 val guide = when {
                     raw != null && mapped == null -> staticTargetGuide()
                     else -> compositionGuide?.suggest(mapped, null, scene) ?: detectedGuide(mapped)
@@ -184,7 +210,7 @@ class FrameCameraController(context: Context) {
                         geometry.copy(detected = null, leveled = null)
                     }
                 }
-                onGuide(guide, mapped, lines, null)
+                onGuide(guide, mapped, lines, null, subjectTracker.hasSelection)
             } catch (error: Exception) {
                 Log.w("FrameAI", "Preview mapping unavailable", error)
                 onGuide(
@@ -192,6 +218,7 @@ class FrameCameraController(context: Context) {
                     null,
                     null,
                     "The framing guide could not align with the preview. Reopen the camera to retry.",
+                    subjectTracker.hasSelection,
                 )
             }
         }
@@ -207,6 +234,23 @@ class FrameCameraController(context: Context) {
         return ZoomLens.target(zoom.zoomRatio, scale, zoom.minZoomRatio, zoom.maxZoomRatio) != null
     }
 
+    /** Matches the sensor crop to the frame. The preview view's own shape does the final crop, including 1:1. */
+    fun setFrameRatio(ratio: FrameRatio) {
+        val aspect = when (ratio) {
+            FrameRatio.FULL -> null
+            FrameRatio.SIXTEEN_NINE -> AspectRatio.RATIO_16_9
+            FrameRatio.FOUR_THREE, FrameRatio.SQUARE -> AspectRatio.RATIO_4_3
+        }
+        val output = aspect?.let { CameraController.OutputSize(it) }
+        try {
+            lifecycleController.previewTargetSize = output
+            lifecycleController.imageCaptureTargetSize = output
+            lifecycleController.imageAnalysisTargetSize = output
+        } catch (error: Exception) {
+            Log.w("FrameAI", "Camera ratio unavailable", error)
+        }
+    }
+
     fun applyZoom(scale: Float) {
         try {
             val control = lifecycleController.cameraControl ?: return
@@ -219,6 +263,20 @@ class FrameCameraController(context: Context) {
     }
 
     private fun frontCamera(): Boolean = facingFront
+
+    /** Selects the object under the tap, in preview coordinates from 0 to 1. An empty tap clears it. */
+    fun selectSubjectAt(x: Float, y: Float): Boolean {
+        val chosen = SubjectTap.choose(previewTargets.get(), x, y)
+        val id = chosen?.id
+        if (id == null) {
+            subjectTracker.clearSelection()
+            return false
+        }
+        subjectTracker.select(id)
+        return true
+    }
+
+    fun clearSubjectSelection() = subjectTracker.clearSelection()
 
     private fun maybeSendFrame(image: androidx.camera.core.ImageProxy) {
         if (!captureFrames) return
