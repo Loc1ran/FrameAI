@@ -1,5 +1,47 @@
 # Measured framing UI
 
+## Camera-style rotation — November 15, 2026
+
+The camera keeps a portrait coordinate system when the phone turns. Preview,
+grid, subject markers, shutter, and control slots do not move or change aspect.
+Only the labels, guidance text, and menu content turn in 90-degree steps. Their
+content is measured in the reading direction so sideways text fits its slot.
+The orientation listener pauses with the screen and ignores diagonal jitter.
+
+The photo editor can still use its landscape layout. CameraX 1.3.4 already
+updates capture orientation from its own sensor listener, independently of the
+fixed preview. Tracking and composition code remain unchanged by this update.
+
+Checks cover unchanged preview/shutter bounds at 0, 90, 180, and 270 degrees,
+rotated label bounds, usable menus, aspect-ratio selection, orientation jitter,
+and retaining an edit across editor rotation. Physical sensor calibration on
+other phones has not been checked.
+
+## Earlier responsive UI update
+
+The camera now has one compact toolbar: subject/scene mode, photo shape, and an
+options menu for the guide and AI. The default photo shape is 4:3. Explicitly
+choosing Full still fills the available preview area. Fixed shapes fit inside
+both available dimensions; they do not stretch when the phone turns.
+
+Portrait keeps the preview above guidance and capture controls. The initial
+landscape camera layout was replaced by the fixed layout above. Longer advice scrolls independently while
+the shutter remains available. The editor also uses a side-by-side layout in
+landscape and keeps the photo visible while scrolling its controls in portrait.
+
+Orientation and size changes update the layout without recreating the activity,
+so an in-progress edit is preserved. Existing tracking, subject selection, and
+composition logic were left unchanged in this UI update.
+
+Validation: Android build, 53 local tests, and 12 device tests passed on RMX3842.
+The new device checks cover 4:3, 16:9, and square previews in both orientations,
+visible capture controls, and rotating during an asynchronous look application.
+Screenshots use a real camera preview and a synthetic editor fixture. Other
+devices, extreme font sizes, and multi-window resizing have not been verified.
+
+The notes below describe the earlier framing redesign; current composition
+rules have since evolved independently.
+
 The former UI generated a default subject rectangle when no detection was available,
 could show READY from a generic scene rule, and mixed cloud suggestions with local
 movement cues. A dashed target and short “Move” label did not explain whether to

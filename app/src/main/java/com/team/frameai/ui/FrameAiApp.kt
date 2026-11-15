@@ -1,5 +1,10 @@
 package com.team.frameai.ui
 
+import android.app.Activity
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,12 +29,23 @@ fun FrameAiApp(
     var photoStamp by rememberSaveable { mutableStateOf("") }
     var suggestedLut by rememberSaveable { mutableStateOf("warm_film") }
     var captureGuide by remember { mutableStateOf<LiveGuide?>(null) }
+    val showingCamera = route == CameraRoute || photoPath.isEmpty()
+    val context = LocalContext.current
+    val activity = remember(context) {
+        generateSequence(context) { (it as? ContextWrapper)?.baseContext }.filterIsInstance<Activity>().firstOrNull()
+    }
+    DisposableEffect(activity, showingCamera) {
+        activity?.requestedOrientation = if (showingCamera) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+    }
 
     FrameAiTheme {
-        if (route == CameraRoute || photoPath.isEmpty()) {
+        if (showingCamera) {
             CameraScreen(
                 faceDetector = faceDetector,
                 compositionGuide = compositionGuide,
+                orientationDegrees = rememberCameraOrientation(),
                 onCaptured = { file, stamp, lutId, guide ->
                     photoPath = file.absolutePath
                     photoStamp = stamp

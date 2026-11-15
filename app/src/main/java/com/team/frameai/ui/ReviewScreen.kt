@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.team.frameai.BuildConfig
@@ -123,36 +124,32 @@ fun ReviewScreen(
         LutPack.looks.firstOrNull { it.id == id }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().background(FrameInk)
-            .safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Your photo", color = FramePaper, fontSize = 24.sp, modifier = Modifier.weight(1f))
-            TextButton(enabled = !busy, onClick = onRetake) { Text("Retake") }
+    val photo: @Composable (Modifier) -> Unit = { modifier ->
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(visibleEdit?.let { "Edited · ${lutLabel(it.lutId)}" } ?: "Original", color = FramePaper)
+            Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                .background(FrameSurface), contentAlignment = Alignment.Center) {
+                if (shown != null) {
+                    Image(
+                        bitmap = shown.asImageBitmap(),
+                        contentDescription = visibleEdit?.let { "Edited photo, ${lutLabel(it.lutId)}" } ?: "Original photo",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().testTag("reviewPhoto"),
+                    )
+                } else if (!openFailed) {
+                    Text("Opening photo…", color = FrameMuted)
+                }
+            }
         }
-        Text(
-            visibleEdit?.let { "Edited · ${lutLabel(it.lutId)}" } ?: "Original",
-            color = FramePaper,
-        )
-        if (shown != null) {
-            Image(
-                bitmap = shown.asImageBitmap(),
-                contentDescription = visibleEdit?.let { "Edited photo, ${lutLabel(it.lutId)}" } ?: "Original photo",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).height(300.dp)
-                    .clip(RoundedCornerShape(16.dp)).background(FrameSurface),
-            )
-        } else if (!openFailed) {
-            Text("Opening photo…", color = FrameMuted, modifier = Modifier.padding(vertical = 32.dp))
-        }
-
-        Text("02   CHOOSE YOUR COLOR", color = FrameGold, fontSize = 11.sp)
+    }
+    val controls: @Composable (Modifier) -> Unit = { modifier ->
+        Column(modifier.verticalScroll(rememberScrollState())) {
+        Text("CHOOSE YOUR LOOK", color = FrameGold, fontSize = 11.sp)
         Text(
             if (rankedIds.isEmpty()) {
-                "Swipe right for 10 looks. Apply one at a time. Save keeps the photo on screen."
+                "Swipe to explore 10 looks. Tap a look to preview it."
             } else {
-                "Swipe right through the 10 looks chosen for this photo. Apply one at a time. Save keeps the photo on screen."
+                "10 looks chosen for this photo. Tap one to preview it."
             },
             color = FrameMuted,
             fontSize = 12.sp,
@@ -316,7 +313,30 @@ fun ReviewScreen(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         ) { Text("Get photo tip") }
         coaching?.let { CoachingCard(it) }
+
+        }
     }
+    BoxWithConstraints(Modifier.fillMaxSize().background(FrameInk).safeDrawingPadding().padding(16.dp)) {
+        val landscape = maxWidth > maxHeight
+        val panelWidth = (maxWidth * 0.44f).coerceIn(280.dp, 380.dp)
+        val photoHeight = maxHeight * 0.43f
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Your photo", color = FramePaper, fontSize = 24.sp, modifier = Modifier.weight(1f))
+                TextButton(enabled = !busy, onClick = onRetake) { Text("Retake") }
+            }
+            if (landscape) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    photo(Modifier.weight(1f).fillMaxHeight())
+                    controls(Modifier.width(panelWidth).fillMaxHeight())
+                }
+            } else {
+                photo(Modifier.fillMaxWidth().height(photoHeight))
+                controls(Modifier.weight(1f).fillMaxWidth())
+            }
+        }
+    }
+
 }
 
 internal fun reviewLookIds(aiIds: List<String>, suggestedId: String?, keepId: String? = null): List<String> {

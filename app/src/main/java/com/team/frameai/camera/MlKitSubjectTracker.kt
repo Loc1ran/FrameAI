@@ -15,7 +15,13 @@ import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.model.RawFaceBox
 import com.team.frameai.vision.FaceBoxMath
 
-data class TrackedFrame(val primary: RawFaceBox?, val boxes: List<FrameRect>)
+data class TrackedSubject(val id: Int, val sensor: RawFaceBox)
+
+data class TrackedFrame(
+    val primary: RawFaceBox?,
+    val boxes: List<FrameRect>,
+    val subjects: List<TrackedSubject> = emptyList(),
+)
 
 /**
  * Follows one prominent object without switching to newly appearing faces.
@@ -29,6 +35,11 @@ class MlKitSubjectTracker(
     private val subjectLock = SubjectLock()
 
     val isLocked: Boolean get() = subjectLock.isLocked(SystemClock.elapsedRealtime())
+    val hasSelection: Boolean get() = subjectLock.hasSelection()
+
+    fun select(id: Int) = subjectLock.select(id, SystemClock.elapsedRealtime())
+
+    fun clearSelection() = subjectLock.clearSelection()
 
     @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     fun track(image: ImageProxy): RawFaceBox? = inspect(image).primary
@@ -56,8 +67,19 @@ class MlKitSubjectTracker(
             )
         }
         val boxes = candidates.map { it.box }
+        val subjects = candidates.mapNotNull { candidate ->
+            val id = candidate.id ?: return@mapNotNull null
+            val upright = FaceBoxNormalized.fromEdges(
+                candidate.box.left, candidate.box.top, candidate.box.right, candidate.box.bottom,
+            )
+            val sensor = FaceBoxMath.uprightBoxToSensor(upright, rotation)
+            TrackedSubject(
+                id,
+                RawFaceBox(sensor.centerX, sensor.centerY, sensor.left, sensor.top, sensor.right, sensor.bottom),
+            )
+        }
         val chosen = subjectLock.choose(candidates, SystemClock.elapsedRealtime())
-            ?: return TrackedFrame(null, boxes)
+            ?: return TrackedFrame(null, boxes, subjects)
         val upright = FaceBoxNormalized.fromEdges(chosen.box.left, chosen.box.top, chosen.box.right, chosen.box.bottom)
         val sensor = FaceBoxMath.uprightBoxToSensor(upright, rotation)
         return TrackedFrame(
@@ -70,6 +92,7 @@ class MlKitSubjectTracker(
                 bottom = sensor.bottom,
             ),
             boxes,
+            subjects,
         )
     }
 
@@ -93,6 +116,7 @@ class MlKitSubjectTracker(
         fun defaultDetector(): ObjectDetector {
             val options = ObjectDetectorOptions.Builder()
                 .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
+                .enableMultipleObjects()
                 .build()
             return ObjectDetection.getClient(options)
         }
