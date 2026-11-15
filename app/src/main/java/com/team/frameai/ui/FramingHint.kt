@@ -3,6 +3,7 @@ package com.team.frameai.ui
 import com.team.frameai.guide.CoachAction
 import com.team.frameai.guide.GeometryCoach
 import com.team.frameai.guide.GuideEngine
+import com.team.frameai.guide.LightingAdviceEngine
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.model.LiveGuide
 
@@ -40,6 +41,7 @@ fun framingHint(guide: LiveGuide?, area: FaceBoxNormalized? = null): FramingHint
 }
 
 private fun detailFor(guide: LiveGuide): String {
+    LightingAdviceEngine.detail(guide.message)?.let { return it }
     return when {
         guide.isReady -> "The frame matches the goal."
         guide.message == GeometryCoach.ROTATE_CLOCKWISE ||
@@ -55,6 +57,7 @@ private fun detailFor(guide: LiveGuide): String {
 }
 
 private fun symbolFor(guide: LiveGuide, area: FaceBoxNormalized?): String {
+    LightingAdviceEngine.symbol(guide.message)?.let { return it }
     if (guide.isReady) return "✓"
     if (guide.message == GeometryCoach.ROTATE_CLOCKWISE) return "↻"
     if (guide.message == GeometryCoach.ROTATE_COUNTERCLOCKWISE) return "↺"

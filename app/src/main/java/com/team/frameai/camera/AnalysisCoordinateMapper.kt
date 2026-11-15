@@ -4,6 +4,8 @@ import androidx.camera.view.TransformExperimental
 import androidx.camera.view.transform.CoordinateTransform
 import androidx.camera.view.transform.OutputTransform
 import com.team.frameai.guide.HeadOrientation
+import com.team.frameai.guide.LightingMap
+import com.team.frameai.guide.LightingRead
 import com.team.frameai.guide.NormLine
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.model.FaceBoxNormalized
@@ -109,5 +111,44 @@ object AnalysisCoordinateMapper {
         fun nx(x: Float) = (x / viewWidth).coerceIn(0f, 1f)
         fun ny(y: Float) = (y / viewHeight).coerceIn(0f, 1f)
         return NormLine(nx(points[0]), ny(points[1]), nx(points[2]), ny(points[3]))
+    }
+
+    /** Places each luma-grid cell into the preview. Cells outside the crop stay outside 0..1 and are not drawn. */
+    @androidx.annotation.OptIn(markerClass = [TransformExperimental::class])
+    fun mapLighting(
+        source: OutputTransform,
+        target: OutputTransform,
+        imageWidth: Int,
+        imageHeight: Int,
+        viewWidth: Int,
+        viewHeight: Int,
+        lighting: LightingRead,
+        rotationDegrees: Int,
+    ): LightingMap? {
+        if (viewWidth <= 0 || viewHeight <= 0 || imageWidth <= 0 || imageHeight <= 0) return null
+        val columns = lighting.columns
+        val rows = lighting.rows
+        val count = columns * rows
+        if (lighting.bands.size != count) return null
+        val transform = CoordinateTransform(source, target)
+        val points = FloatArray(count * 2)
+        for (row in 0 until rows) {
+            for (col in 0 until columns) {
+                val nx = (col + 0.5f) / columns
+                val ny = (row + 0.5f) / rows
+                val (sx, sy) = FaceBoxMath.uprightPointToSensor(nx, ny, rotationDegrees)
+                val index = row * columns + col
+                points[index * 2] = sx * imageWidth
+                points[index * 2 + 1] = sy * imageHeight
+            }
+        }
+        transform.mapPoints(points)
+        val xs = FloatArray(count)
+        val ys = FloatArray(count)
+        for (index in 0 until count) {
+            xs[index] = points[index * 2] / viewWidth
+            ys[index] = points[index * 2 + 1] / viewHeight
+        }
+        return LightingMap(columns, rows, lighting.bands, xs, ys)
     }
 }

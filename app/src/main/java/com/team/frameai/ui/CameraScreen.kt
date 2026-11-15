@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.team.frameai.guide.CompositionMode
 import com.team.frameai.guide.FrameRatio
 import com.team.frameai.guide.SceneComposition
+import com.team.frameai.guide.LightingMap
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.BuildConfig
 import com.team.frameai.camera.*
@@ -69,6 +70,8 @@ fun CameraScreen(
     var area by remember { mutableStateOf<FaceBoxNormalized?>(null) }
     var live by remember { mutableStateOf<LiveGuide?>(null) }
     var geometry by remember { mutableStateOf<SceneGeometry?>(null) }
+    var lightingMap by remember { mutableStateOf<LightingMap?>(null) }
+    var showLightingMap by rememberSaveable { mutableStateOf(false) }
     var picked by remember { mutableStateOf(false) }
     var tapMark by remember { mutableStateOf<Offset?>(null) }
     var trackingError by remember { mutableStateOf<String?>(null) }
@@ -97,6 +100,7 @@ fun CameraScreen(
                 area = null
                 live = null
                 geometry = null
+                lightingMap = null
                 trackingError = null
                 granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
             } else if (event == Lifecycle.Event.ON_PAUSE) {
@@ -106,6 +110,7 @@ fun CameraScreen(
                 area = null
                 live = null
                 geometry = null
+                lightingMap = null
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -115,11 +120,12 @@ fun CameraScreen(
     DisposableEffect(lifecycleOwner, granted, faceDetector, compositionGuide) {
         controller.detector = faceDetector
         controller.compositionGuide = compositionGuide
-        controller.onGuide = { next, box, lines, failure, manual ->
+        controller.onGuide = { next, box, lines, light, failure, manual ->
             if (resumed) {
                 live = next
                 area = box
                 geometry = lines
+                lightingMap = light
                 picked = manual
                 areaAt = SystemClock.elapsedRealtime()
                 trackingError = failure
@@ -190,6 +196,7 @@ fun CameraScreen(
             area = null
             live = null
             geometry = null
+            lightingMap = null
             tapMark = null
         }
         val preview: @Composable (Modifier) -> Unit = { modifier ->
@@ -206,6 +213,7 @@ fun CameraScreen(
                     },
                     update = { controller.previewView = it },
                 )
+                if (mode == CompositionMode.SUBJECT && showLightingMap) LightingOverlay(lightingMap, guided)
                 if (mode == CompositionMode.SCENE) SceneOverlay(null, guided, settled)
                 else GuideOverlay(live, area, guided, geometry)
                 if (mode == CompositionMode.SUBJECT) {
@@ -283,6 +291,8 @@ fun CameraScreen(
                 onRatio = { ratioName = it.name },
                 onGuide = { guided = !guided },
                 onCloud = { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ },
+                showLightingMap = showLightingMap,
+                onLightingMap = { showLightingMap = !showLightingMap },
             )
             if (granted) {
                 preview(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp))
@@ -316,6 +326,8 @@ private fun CameraToolbar(
     onRatio: (FrameRatio) -> Unit,
     onGuide: () -> Unit,
     onCloud: () -> Unit,
+    showLightingMap: Boolean,
+    onLightingMap: () -> Unit,
 ) {
     var menu by remember { mutableStateOf<String?>(null) }
     Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 12.dp).testTag("cameraToolbar"),
@@ -364,6 +376,8 @@ private fun CameraToolbar(
                 CameraLabel(orientationDegrees, Modifier.width(if (orientationDegrees % 180 == 0) 240.dp else 208.dp)) { Column(Modifier.width(240.dp)) {
                 DropdownMenuItem(text = { Text(if (guided) "Turn guide off" else "Turn guide on") },
                     onClick = { onGuide(); menu = null })
+                DropdownMenuItem(text = { Text(if (showLightingMap) "Hide lighting map" else "Show lighting map") },
+                    onClick = { onLightingMap(); menu = null })
                 if (cloudAvailable) DropdownMenuItem(text = { Column {
                     Text(if (cloudOn) "Turn AI off" else "Turn AI on")
                     Text("Shares preview images while on", fontSize = 12.sp)
