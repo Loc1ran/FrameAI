@@ -21,35 +21,14 @@ The JVM tests compile `app/src/main/java` and skip Android-only files: `MainActi
 
 ### Guide
 
-`GuideEngine.suggest(faceBox, steady)` returns exactly one `LiveGuide`. `kind` and `source` are the contract strings.
+Follow `docs/three-developer-gemini-coach-plan.md`. Do not bring back the fixed upper-right circle or a paragraph tip.
 
-- Target `(0.67, 0.33)`. READY when the face center is within ±0.08 x and ±0.10 y. Otherwise ALIGN. Null is NO_FACE.
-- Messages match the frozen mocks. `source` is `offline_rules`.
-- Hints do not say "move left" or "move right".
-- `steady` is accepted and does not add a second tip.
-- `GuideSmoother` eases the box and emits about 4 times per second. A face appearing or disappearing is delivered immediately. A lost face is `NO_FACE` even inside the throttle window, so a previous READY cannot linger.
-- `MainActivity` still calls `GuideEngine` directly. A4 should wrap that call with `GuideSmoother` once the preview transform is trusted. B does not edit the camera screen for this.
+`GuideEngine.suggest(faceBox, steady, scene)` returns one `LiveGuide`. `kind` stays `ALIGN_SUBJECT`, `READY`, or `NO_FACE`. `source` for this path stays `offline_rules`.
 
-### A4 geometry and copy
-
-These constants in `GuideEngine` are the source of truth. Do not draw a fixed 42dp ring and call it the ready area.
-
-| | Value |
-|---|---|
-| Target | `(0.67, 0.33)` in PreviewView space, origin top-left |
-| Ready when | face center is within `±0.08` x and `±0.10` y of the target, inclusive |
-| Otherwise, with a face | `ALIGN_SUBJECT` |
-| No face | `NO_FACE`, subject coordinates null |
-
-Draw the target as an ellipse of half-width `0.08` and half-height `0.10` of the preview, in the same normalized space. The dot is the face center. Do not add "move left" or "move right".
-
-Copy, already matched to the frozen mocks:
-
-- ALIGN: `Align the face with the target circle`
-- READY: `Framing looks good — hold steady and shoot`
-- NO_FACE: `Use the grid to place your subject`
-
-`source` stays `offline_rules`. `kind` stays one of the three contract strings.
+- A person can sit on either third. Size and clipped edges are judged before placement.
+- No person is still a picture. A horizon, a brighter side, or an even frame each get their own guide.
+- The preview draws a dashed goal, a solid current frame, and an arrow. It does not print `message`.
+- `GuideSmoother` is not wired in `MainActivity`. Do not add "move left" or "move right" to any text that still exists in JSON.
 
 ### LUT
 
@@ -80,7 +59,7 @@ The guide target is on the **displayed** preview, origin top-left, both axes 0..
 1. ML Kit returns an upright box when `InputImage.fromMediaImage(image, rotation)` is used. `MlKitPrimaryFaceDetector` converts that box back into the unrotated buffer before returning `RawFaceBox`.
 2. `AnalysisCoordinateMapper` maps the buffer box into the `PreviewView` with CameraX `ImageProxyTransformFactory`. A failed mapping with a raw face keeps the static target.
 
-If the on-phone marker is obviously offset, stop drawing it and keep the static target plus the NO_FACE / ALIGN copy. Say that tracking is an MVP limit. Do not present a wrong box as accurate.
+If the on-phone marker is obviously offset, stop drawing the solid frame and keep the dashed goal. Do not present a wrong box as accurate.
 
 ## Tests
 
@@ -109,13 +88,4 @@ py -3 -m pytest
 - Missing credentials or any other mode returns 503. The app should show the offline coach, not a fake Gemini success.
 - 401 bad token, 400 not a JPEG, 413 over 2 MB, 429 already busy, 502 provider failure. The response body does not include the key, the image, or the raw provider error.
 
-Do not put `GEMINI_API_KEY`, `DEMO_TOKEN`, or a service-account JSON in the app or in git. Cloud Run deploy stays manual until the offline camera path is already working:
-
-```
-gcloud run deploy frameai-coach --source . --region us-central1 \
-  --max-instances 1 --min-instances 0 --cpu 1 --memory 512Mi \
-  --set-env-vars AI_MODE=gemini,MODEL_ID=gemini-3.5-flash-lite,GOOGLE_CLOUD_LOCATION=global \
-  --set-secrets GEMINI_API_KEY=frameai-gemini-key:latest,DEMO_TOKEN=frameai-demo-token:latest
-```
-
-Confirm the project, billing, and whether unauthenticated access is actually required before answering the deploy prompts.
+Do not put `GEMINI_API_KEY`, `DEMO_TOKEN`, or a service-account JSON in the app or in git. Do not deploy Cloud Run. Do not enable pay-as-you-go. The live JPEG is the current camera frame, not a sample of a wished-for photo.

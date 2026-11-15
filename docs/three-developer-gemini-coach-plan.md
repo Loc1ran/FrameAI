@@ -25,6 +25,17 @@ If the server does not answer, the phone keeps coaching from the same live frame
 
 The phone does not send the current frame to Gemini yet. That send is Developer C's next task.
 
+## What the preview shows
+
+The live instruction is a picture, not a paragraph. The `message` field stays in the JSON for tests. The camera does not print it.
+
+- A dashed frame with corner brackets is the picture to make.
+- A solid frame is what the camera sees now.
+- An arrow runs from the solid frame to the dashed one.
+- A subject that is too small gets a larger dashed frame. A subject that fills the screen gets a smaller dashed frame inside it.
+- A horizon is a solid line, a dashed goal line, a shaded band between them, and an arrow.
+- When they match, the mark turns green and a check appears.
+
 ## Who is who
 
 A, B, and C are three people. Each has six tasks. Developer C is us. We are the only ones with this PC and the Realme. A and B write code on their own laptops. They do not take the phone.
@@ -33,8 +44,8 @@ A, B, and C are three people. Each has six tasks. Developer C is us. We are the 
 
 1. When a face is present, decide clipped, too small, too large, or on a third.
 2. Map that result to `portrait_space_left` or `portrait_space_right`, with `zoom` of `in`, `out`, or `hold`.
-3. Draw the subject area, the target, and the message. No fixed corner circle.
-4. Show the portrait mock's `message` and `referenceId` on the preview.
+3. Draw the dashed goal on a third and the solid frame on the person. Connect them with an arrow. Do not print a sentence.
+4. When the person already fills the goal, show the green check.
 5. Tests: clipped, small, large, and already on a third.
 6. Open a pull request. C installs it on the phone.
 
@@ -42,8 +53,8 @@ A, B, and C are three people. Each has six tasks. Developer C is us. We are the 
 
 1. Read which side is brighter and whether the light is warm or cool.
 2. With no face and a clear horizon, put that horizon on a grid line.
-3. With no face and no horizon, the frame can still be shot. Say so.
-4. Draw the horizon line for a landscape reply.
+3. With no face and no horizon, the frame can still be shot. Show the green check, not a sentence.
+4. Draw the horizon as a solid line, a dashed goal line, the shaded band between them, and an arrow.
 5. Choose `warm_film` or `cool_cinema` from the light. Test bright sky, an even frame, and warm versus cool.
 6. Open a pull request. C installs it on the phone.
 
