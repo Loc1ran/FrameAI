@@ -111,6 +111,14 @@ class FrameCameraController(context: Context) {
         lifecycleController.setEnabledUseCases(CameraController.IMAGE_CAPTURE)
     }
 
+    fun setActionMode(enabled: Boolean) {
+        lifecycleController.imageCaptureMode = if (enabled) {
+            ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY
+        } else {
+            ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
+        }
+    }
+
     fun takePicture(file: File, onSaved: () -> Unit, onError: (String) -> Unit) {
         try {
             val options = ImageCapture.OutputFileOptions.Builder(file).build()
@@ -127,6 +135,35 @@ class FrameCameraController(context: Context) {
         } catch (error: Exception) {
             onError(error.message ?: "Could not save the photo")
         }
+    }
+
+    /** Captures a short burst sequentially so CameraX never receives overlapping requests. */
+    fun takeBurst(
+        files: List<File>,
+        onSaved: (List<File>) -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        require(files.isNotEmpty()) { "Burst needs at least one output file" }
+        val saved = mutableListOf<File>()
+        fun capture(index: Int) {
+            if (index == files.size) {
+                onSaved(saved.toList())
+                return
+            }
+            val file = files[index]
+            takePicture(
+                file = file,
+                onSaved = {
+                    saved += file
+                    capture(index + 1)
+                },
+                onError = { message ->
+                    files.drop(index).forEach(File::delete)
+                    if (saved.isEmpty()) onError(message) else onSaved(saved.toList())
+                },
+            )
+        }
+        capture(0)
     }
 
     @androidx.annotation.OptIn(markerClass = [TransformExperimental::class])

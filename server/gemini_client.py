@@ -152,6 +152,26 @@ COACH_SCHEMA = {
     ],
 }
 
+ACTION_PROMPT = (
+    "You are FrameAI selecting one photograph from a short chronological action burst. "
+    "Compare every supplied frame. Choose the frame with the strongest meaningful action moment, "
+    "then prefer a sharp main subject, visible face/eyes when relevant, complete important body parts "
+    "and equipment, and a composition that preserves the direction of movement. Reject frames with "
+    "obvious accidental blur, blocked subjects, or important clipping. Motion blur may be intentional "
+    "only when the subject remains readable. Do not invent details outside the images. "
+    "Return the zero-based selectedIndex, one reason under 160 characters, and source=gemini."
+)
+
+ACTION_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "selectedIndex": {"type": "INTEGER"},
+        "reason": {"type": "STRING"},
+        "source": {"type": "STRING", "enum": ["gemini"]},
+    },
+    "required": ["selectedIndex", "reason", "source"],
+}
+
 
 class GeminiNotConfigured(RuntimeError):
     pass
@@ -228,3 +248,35 @@ def coach_image(
     if not text:
         raise ValueError("empty model response")
     return normalize_live_coach(json.loads(text))
+
+
+def select_action_best(images: list[bytes], api_key: str, model_id: str) -> dict:
+    if len(images) < 2:
+        raise ValueError("action burst needs at least two frames")
+    client = _client(api_key)
+    from google.genai import types
+
+    contents = []
+    for index, image in enumerate(images):
+        contents.append(f"Frame {index}")
+        contents.append(types.Part.from_bytes(data=image, mime_type="image/jpeg"))
+    contents.append(ACTION_PROMPT)
+    response = client.models.generate_content(
+        model=model_id,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=ACTION_SCHEMA,
+        ),
+    )
+    text = getattr(response, "text", None)
+    if not text:
+        raise ValueError("empty model response")
+    result = json.loads(text)
+    index = result.get("selectedIndex")
+    reason = result.get("reason")
+    if not isinstance(index, int) or index not in range(len(images)):
+        raise ValueError("selectedIndex outside burst")
+    if not isinstance(reason, str) or not 1 <= len(reason) <= 160:
+        raise ValueError("invalid action reason")
+    return {"selectedIndex": index, "reason": reason, "source": "gemini"}

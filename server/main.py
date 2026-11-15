@@ -18,7 +18,7 @@ from typing import Literal
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile, Response
 
-from gemini_client import GeminiNotConfigured, coach_image, review_image
+from gemini_client import GeminiNotConfigured, coach_image, review_image, select_action_best
 from validate import align_live_coach, load_json, validate_live_coach, validate_shot_review
 
 MAX_BYTES = 2 * 1024 * 1024
@@ -154,6 +154,40 @@ async def live_coach(
         raise HTTPException(status_code=503, detail="AI is not configured")
     except Exception as exc:
         logger.warning("live coach failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="AI request failed")
+    finally:
+        _gemini_lock.release()
+
+
+@app.post("/v1/action-best-shot")
+async def action_best_shot(
+    images: list[UploadFile] = File(...),
+    x_demo_token: str | None = Header(default=None),
+) -> dict:
+    if not _authorized(x_demo_token):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if len(images) not in range(2, 9):
+        raise HTTPException(status_code=400, detail="Burst must contain 2 to 8 JPEG frames")
+    frames = [await _read_jpeg(image) for image in images]
+    mode = os.environ.get("AI_MODE", "mock").strip().lower()
+    if mode == "mock":
+        return {
+            "selectedIndex": len(frames) // 2,
+            "reason": "Demo selection uses the middle burst frame; no image analysis was performed.",
+            "source": "demo_mock",
+        }
+    if mode != "gemini" or not _gemini_configured():
+        raise HTTPException(status_code=503, detail="AI is not configured")
+    if not _gemini_lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="AI is busy")
+    try:
+        model_id = os.environ.get("MODEL_ID", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        return select_action_best(frames, api_key, model_id)
+    except GeminiNotConfigured:
+        raise HTTPException(status_code=503, detail="AI is not configured")
+    except Exception as exc:
+        logger.warning("action selection failed: %s", type(exc).__name__)
         raise HTTPException(status_code=502, detail="AI request failed")
     finally:
         _gemini_lock.release()
