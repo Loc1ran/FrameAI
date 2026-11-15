@@ -144,7 +144,26 @@ def test_mock_live_coach_matches_contract(client):
     body = response.json()
     validate_live_coach(body)
     assert body["source"] == "demo_mock"
+    assert body["suggestedLutId"] in {"warm_film", "cool_cinema", "none"}
     assert body == load_json("live-coach.mock.json")
+
+
+def test_live_coach_rejects_an_unknown_lut():
+    payload = load_json("live-coach.mock.json")
+    payload["suggestedLutId"] = "moody"
+    with pytest.raises(ValidationError):
+        validate_live_coach(payload)
+    payload["source"] = "gemini"
+    cleaned = normalize_live_coach(payload)
+    assert cleaned["suggestedLutId"] == "none"
+
+
+def test_live_coach_fills_a_missing_lut_with_none():
+    payload = load_json("live-coach.mock.json")
+    del payload["suggestedLutId"]
+    cleaned = normalize_live_coach(payload)
+    assert cleaned["suggestedLutId"] == "none"
+    assert cleaned["source"] == "gemini"
 
 
 def test_live_coach_rejects_an_unknown_reference():

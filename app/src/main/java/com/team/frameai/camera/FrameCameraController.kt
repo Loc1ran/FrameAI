@@ -4,29 +4,43 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
+import androidx.camera.view.TransformExperimental
+import androidx.camera.view.transform.ImageProxyTransformFactory
+import com.team.frameai.model.FaceBoxNormalized
+import com.team.frameai.vision.FaceBoxMath
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.team.frameai.guide.ZoomLens
 import com.team.frameai.model.LiveGuide
 import com.team.frameai.model.LutIds
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class FrameCameraController(context: Context) {
     private val appContext = context.applicationContext
     val lifecycleController = LifecycleCameraController(appContext)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private var lastGuideAt = 0L
+    private val subjectTracker = MlKitSubjectTracker()
+    @Volatile private var generation = 0
+    @Volatile private var running = false
+    private var lastFrameSentAt = 0L
+    private val frameSendBusy = AtomicBoolean(false)
 
     @Volatile var detector: PrimaryFaceDetector? = null
     @Volatile var compositionGuide: CompositionGuide? = null
     @Volatile var previewView: androidx.camera.view.PreviewView? = null
-    @Volatile var onGuide: (LiveGuide, com.team.frameai.model.FaceBoxNormalized?) -> Unit = { _, _ -> }
+    @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, String?) -> Unit = { _, _, _ -> }
+    @Volatile var onFrameJpeg: ((ByteArray) -> Unit)? = null
+    @Volatile var captureFrames: Boolean = false
+    @Volatile var sceneLutAllowed: Boolean = true
     @Volatile var suggestedLutId: String = LutIds.WARM_FILM
 
     init {
@@ -35,15 +49,20 @@ class FrameCameraController(context: Context) {
     }
 
     fun start(owner: LifecycleOwner) {
+        running = true
+        generation++
         lifecycleController.bindToLifecycle(owner)
     }
 
     fun stop() {
+        running = false
+        generation++
         lifecycleController.unbind()
     }
 
     fun shutdown() {
         stop()
+        subjectTracker.close()
         analysisExecutor.shutdown()
     }
 
@@ -54,10 +73,15 @@ class FrameCameraController(context: Context) {
             CameraController.IMAGE_CAPTURE or CameraController.IMAGE_ANALYSIS,
         )
         lifecycleController.setImageAnalysisAnalyzer(analysisExecutor) { image ->
+            val token = generation
             try {
                 publishGuide(image)
-            } catch (_: Throwable) {
-                // A bad frame must not freeze the preview.
+            } catch (error: Exception) {
+                Log.w("FrameAI", "Frame analysis unavailable", error)
+                mainHandler.post {
+                    if (running && token == generation) onGuide(staticTargetGuide(), null,
+                        "Object detection is unavailable. Reopen the camera to retry; you can still take a photo.")
+                }
             } finally {
                 image.close()
             }
@@ -87,27 +111,88 @@ class FrameCameraController(context: Context) {
         }
     }
 
+    @androidx.annotation.OptIn(markerClass = [TransformExperimental::class])
     private fun publishGuide(image: androidx.camera.core.ImageProxy) {
-        val faceDetector = detector ?: return
+        if (!running) return
+        val token = generation
+        val frameAt = SystemClock.elapsedRealtime()
+        val raw = if (subjectTracker.isLocked) subjectTracker.track(image)
+            else detector?.detectPrimaryFace(image) ?: subjectTracker.track(image)
+        // ML Kit's adapter already returns unrotated buffer coordinates.
+        val source = ImageProxyTransformFactory().getOutputTransform(image)
+        val width = image.width
+        val height = image.height
+        val upright = raw?.let {
+            FaceBoxMath.sensorBoxToUpright(
+                FaceBoxNormalized(it.centerX, it.centerY, it.left, it.top, it.right, it.bottom),
+                image.imageInfo.rotationDegrees,
+            )
+        }
+        val scene = ImageSceneSampler.read(image, upright)
+        if (scene != null && sceneLutAllowed) suggestedLutId = scene.lookId
+        mainHandler.post {
+            if (!running || token != generation) return@post
+            try {
+                val preview = previewView
+                val target = preview?.outputTransform
+                val mapped = if (raw != null && preview != null && target != null &&
+                    SystemClock.elapsedRealtime() - frameAt < 1_500L) {
+                    AnalysisCoordinateMapper.map(source, target, width, height, preview.width, preview.height, raw)
+                } else null
+                val guide = when {
+                    raw != null && mapped == null -> staticTargetGuide()
+                    else -> compositionGuide?.suggest(mapped, null, scene) ?: detectedGuide(mapped)
+                }
+                onGuide(guide, mapped, null)
+            } catch (error: Exception) {
+                Log.w("FrameAI", "Preview mapping unavailable", error)
+                onGuide(staticTargetGuide(), null, "The framing guide could not align with the preview. Reopen the camera to retry.")
+            }
+        }
+        maybeSendFrame(image)
+    }
+
+    fun finishFrameSend() {
+        frameSendBusy.set(false)
+    }
+
+    fun canApplyZoom(scale: Float): Boolean {
+        val zoom = lifecycleController.zoomState.value ?: return false
+        return ZoomLens.target(zoom.zoomRatio, scale, zoom.minZoomRatio, zoom.maxZoomRatio) != null
+    }
+
+    fun applyZoom(scale: Float) {
+        try {
+            val control = lifecycleController.cameraControl ?: return
+            val zoom = lifecycleController.zoomState.value ?: return
+            val target = ZoomLens.target(zoom.zoomRatio, scale, zoom.minZoomRatio, zoom.maxZoomRatio) ?: return
+            control.setZoomRatio(target)
+        } catch (_: Exception) {
+            // The lens is not ready yet. Another tap can try again.
+        }
+    }
+
+    private fun maybeSendFrame(image: androidx.camera.core.ImageProxy) {
+        if (!captureFrames) return
+        val listener = onFrameJpeg ?: return
         val now = SystemClock.elapsedRealtime()
-        if (now - lastGuideAt < 250L) return
-        lastGuideAt = now
-        val raw = faceDetector.detectPrimaryFace(image)
-        val preview = previewView
-        val mapped = if (raw != null && preview != null) {
-            AnalysisCoordinateMapper.map(image, preview, raw)
-        } else {
-            null
+        if (now - lastFrameSentAt < FRAME_INTERVAL_MS) return
+        if (!frameSendBusy.compareAndSet(false, true)) return
+        lastFrameSentAt = now
+        try {
+            val jpeg = FrameJpeg.encode(image)
+            if (jpeg == null) {
+                frameSendBusy.set(false)
+                return
+            }
+            val token = generation
+            mainHandler.post {
+                if (running && captureFrames && token == generation) listener(jpeg)
+                else finishFrameSend()
+            }
+        } catch (_: Throwable) {
+            frameSendBusy.set(false)
         }
-        val scene = ImageSceneSampler.read(image, mapped)
-        if (scene != null) suggestedLutId = scene.lookId
-        val guide = when {
-            raw != null && mapped == null -> staticTargetGuide()
-            else -> compositionGuide?.suggest(mapped, null, scene) ?: detectedGuide(mapped)
-        }
-        val deliver = onGuide
-        val area = mapped
-        mainHandler.post { deliver(guide, area) }
     }
 
     private fun detectedGuide(mapped: com.team.frameai.model.FaceBoxNormalized?): LiveGuide {
@@ -149,5 +234,6 @@ class FrameCameraController(context: Context) {
     private companion object {
         const val TARGET_X = 0.67
         const val TARGET_Y = 0.33
+        const val FRAME_INTERVAL_MS = 4_000L
     }
 }

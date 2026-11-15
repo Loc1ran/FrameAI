@@ -15,6 +15,7 @@ import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import kotlin.math.max
 
 object ImageSaver {
@@ -30,8 +31,15 @@ object ImageSaver {
 
     fun writeJpeg(bitmap: Bitmap, file: File, quality: Int = 92) {
         file.parentFile?.mkdirs()
-        FileOutputStream(file).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        try {
+            FileOutputStream(file).use { out ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) {
+                    throw IOException("Could not encode JPEG")
+                }
+            }
+        } catch (error: Exception) {
+            file.delete()
+            throw error
         }
     }
 
@@ -99,15 +107,23 @@ object ImageSaver {
             put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/FrameAI")
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
-        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            ?: return null
-        context.contentResolver.openOutputStream(uri)?.use { out ->
-            source.inputStream().use { input -> input.copyTo(out) }
-        } ?: return null
-        values.clear()
-        values.put(MediaStore.Images.Media.IS_PENDING, 0)
-        context.contentResolver.update(uri, values, null, null)
-        return uri
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IOException("Could not create gallery entry")
+        try {
+            val stream = resolver.openOutputStream(uri)
+                ?: throw IOException("Could not open gallery entry")
+            stream.use { out -> source.inputStream().use { input -> input.copyTo(out) } }
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            if (resolver.update(uri, values, null, null) != 1) {
+                throw IOException("Could not publish gallery entry")
+            }
+            return uri
+        } catch (error: Exception) {
+            runCatching { resolver.delete(uri, null, null) }.exceptionOrNull()?.let(error::addSuppressed)
+            throw error
+        }
     }
 
     fun share(context: Context, file: File) {

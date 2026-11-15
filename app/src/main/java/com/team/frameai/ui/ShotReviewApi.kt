@@ -3,6 +3,8 @@ package com.team.frameai.ui
 import com.team.frameai.model.ContractJson
 import com.team.frameai.model.ShotReview
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.ByteArrayOutputStream
@@ -27,6 +29,10 @@ class ShotReviewClient(
             withTimeout(12_000) {
                 withContext(Dispatchers.IO) { post(jpeg) }
             }
+        } catch (_: TimeoutCancellationException) {
+            offlineReview
+        } catch (cancel: CancellationException) {
+            throw cancel
         } catch (_: Exception) {
             offlineReview
         }

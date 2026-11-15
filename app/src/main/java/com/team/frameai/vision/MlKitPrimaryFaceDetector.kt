@@ -1,6 +1,7 @@
 package com.team.frameai.vision
 
 import android.graphics.Rect
+import android.util.Log
 import androidx.camera.core.ImageProxy
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -10,7 +11,6 @@ import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.team.frameai.camera.PrimaryFaceDetector
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.model.RawFaceBox
-import java.util.concurrent.TimeUnit
 
 /**
  * Synchronous ML Kit face box in the raw ImageProxy buffer.
@@ -22,13 +22,15 @@ class MlKitPrimaryFaceDetector(
     @Volatile
     private var closed = false
 
+    @androidx.annotation.OptIn(markerClass = [androidx.camera.core.ExperimentalGetImage::class])
     override fun detectPrimaryFace(image: ImageProxy): RawFaceBox? {
         if (closed) return null
         val media = image.image ?: return null
         return try {
             val rotation = image.imageInfo.rotationDegrees
             val input = InputImage.fromMediaImage(media, rotation)
-            val faces = Tasks.await(detector.process(input), TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            // The controller owns this buffer until detection has finished.
+            val faces = Tasks.await(detector.process(input))
             val primary = faces.maxByOrNull { face ->
                 val rect = face.boundingBox
                 rect.width() * rect.height()
@@ -44,6 +46,7 @@ class MlKitPrimaryFaceDetector(
                 bottom = sensor.bottom,
             )
         } catch (error: Exception) {
+            Log.w("FrameAI", "Face detection unavailable; trying object tracking", error)
             null
         }
     }
@@ -66,8 +69,6 @@ class MlKitPrimaryFaceDetector(
     }
 
     companion object {
-        private const val TIMEOUT_MS = 800L
-
         fun defaultDetector(): FaceDetector {
             val options = FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)

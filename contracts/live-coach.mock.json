@@ -10,5 +10,6 @@
   "subjectX": 0.48,
   "subjectY": 0.46,
   "isReady": false,
+  "suggestedLutId": "warm_film",
   "source": "demo_mock"
 }

@@ -48,6 +48,7 @@ ALLOWED_COACH_KEYS = {
     "subjectX",
     "subjectY",
     "isReady",
+    "suggestedLutId",
     "source",
 }
 
@@ -84,6 +85,8 @@ def normalize_live_coach(payload: object) -> dict:
         cleaned["subjectX"] = None
     if "subjectY" not in cleaned:
         cleaned["subjectY"] = None
+    if cleaned.get("suggestedLutId") not in {"warm_film", "cool_cinema", "none"}:
+        cleaned["suggestedLutId"] = "none"
     return validate_live_coach(cleaned)
 
 

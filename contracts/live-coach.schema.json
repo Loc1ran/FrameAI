@@ -13,6 +13,7 @@
     "targetX",
     "targetY",
     "isReady",
+    "suggestedLutId",
     "source"
   ],
   "properties": {
@@ -41,6 +42,10 @@
     "subjectX": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
     "subjectY": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
     "isReady": { "type": "boolean" },
+    "suggestedLutId": {
+      "type": "string",
+      "enum": ["warm_film", "cool_cinema", "none"]
+    },
     "source": { "type": "string", "enum": ["gemini", "offline_rules", "demo_mock"] }
   },
   "additionalProperties": false
