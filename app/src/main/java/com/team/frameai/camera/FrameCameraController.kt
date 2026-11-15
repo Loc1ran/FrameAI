@@ -1,6 +1,14 @@
 package com.team.frameai.camera
 
 import android.content.Context
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CaptureRequest
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.Camera2CameraControl
+import androidx.camera.camera2.interop.CaptureRequestOptions
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.exifinterface.media.ExifInterface
+import com.team.frameai.guide.ActionExposure
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -138,16 +146,39 @@ class FrameCameraController(context: Context) {
         }
     }
 
-    /** Captures a short burst sequentially so CameraX never receives overlapping requests. */
+    /** Meter once, then freeze motion with a short exposure for the candidate burst. */
+    @androidx.annotation.OptIn(markerClass = [ExperimentalCamera2Interop::class])
     fun takeBurst(
         files: List<File>,
         onSaved: (List<File>) -> Unit,
         onError: (String) -> Unit,
     ) {
         require(files.isNotEmpty()) { "Burst needs at least one output file" }
+        val info = lifecycleController.cameraInfo ?: return onError("Camera is not ready.")
+        val control = lifecycleController.cameraControl ?: return onError("Camera is not ready.")
+        val camera2 = Camera2CameraInfo.from(info)
+        val manual = camera2.getCameraCharacteristic(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+            ?.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR) == true
+        val exposureRange = camera2.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+        val isoRange = camera2.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+        if (!manual || exposureRange == null || isoRange == null) {
+            onError("This camera cannot set a fast Action shutter. Try a camera with manual exposure support.")
+            return
+        }
+        val interop = Camera2CameraControl.from(control)
+        val previous = interop.captureRequestOptions
+        val token = generation
+        val meter = File(files.first().parentFile, files.first().name + ".meter.jpg")
+        fun restore() { interop.setCaptureRequestOptions(previous) }
         val saved = mutableListOf<File>()
         fun capture(index: Int) {
+            if (!running || token != generation) {
+                restore()
+                onError("Burst interrupted. Captured frames are kept on the phone.")
+                return
+            }
             if (index == files.size) {
+                restore()
                 onSaved(saved.toList())
                 return
             }
@@ -155,16 +186,58 @@ class FrameCameraController(context: Context) {
             takePicture(
                 file = file,
                 onSaved = {
+                    val actualSeconds = try {
+                        ExifInterface(file).getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
+                    } catch (_: Exception) { 0.0 }
+                    if (actualSeconds <= 0.0 || actualSeconds > 0.0021) {
+                        restore()
+                        onError("Could not verify a fast shutter on this camera. Captured frames are retained in app storage.")
+                        return@takePicture
+                    }
                     saved += file
                     capture(index + 1)
                 },
                 onError = { message ->
+                    restore()
                     files.drop(index).forEach(File::delete)
                     if (saved.isEmpty()) onError(message) else onSaved(saved.toList())
                 },
             )
         }
-        capture(0)
+        takePicture(meter, onSaved = {
+            try {
+                if (!running || token != generation) {
+                    meter.delete()
+                    onError("Burst interrupted. Please retry.")
+                    return@takePicture
+                }
+                val exif = ExifInterface(meter)
+                val seconds = exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
+                val iso = exif.getAttributeInt(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, 0)
+                meter.delete()
+                val plan = ActionExposure.plan(seconds, iso, exposureRange.lower, exposureRange.upper,
+                    isoRange.lower, isoRange.upper)
+                if (plan == null) {
+                    onError("More light is needed for a fast Action shutter, or exposure metering is unavailable.")
+                    return@takePicture
+                }
+                val options = CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                    .setCaptureRequestOption(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
+                    .setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, plan.nanos)
+                    .setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, plan.iso)
+                    .build()
+                val applied = interop.addCaptureRequestOptions(options)
+                applied.addListener({
+                    try { applied.get(); capture(0) }
+                    catch (_: Exception) { restore(); onError("Could not apply the fast shutter. Please retry.") }
+                }, ContextCompat.getMainExecutor(appContext))
+            } catch (_: Exception) {
+                meter.delete()
+                restore()
+                onError("Could not meter the Action exposure. Please retry in brighter light.")
+            }
+        }, onError = { meter.delete(); onError(it) })
     }
 
     @androidx.annotation.OptIn(markerClass = [TransformExperimental::class])

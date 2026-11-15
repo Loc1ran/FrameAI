@@ -185,8 +185,8 @@ fun CameraScreen(
             FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
         CompositionMode.ACTION -> FramingHint(
             "Capture the movement",
-            if (cloudOn && actionClient.enabled) "One tap captures five frames. AI keeps the strongest action moment."
-            else "One tap captures five frames. The phone keeps the sharpest frame.",
+            if (cloudOn && actionClient.enabled) "Use bright light. A fast shutter captures eight frames; AI checks subject sharpness."
+            else "Use bright light. Eight fast-shutter shots, ranked by overall detail. AI can check the moving subject.",
             "⚡",
         )
         CompositionMode.SUBJECT ->
@@ -248,7 +248,7 @@ fun CameraScreen(
                     when {
                         !guided -> "FREE FRAME"
                         mode == CompositionMode.SCENE -> "SCENE · ACTION + SURROUNDINGS"
-                        mode == CompositionMode.ACTION -> "ACTION · FIVE-FRAME BURST"
+                        mode == CompositionMode.ACTION -> "ACTION · EIGHT-FRAME BURST"
                         trackingError != null -> "TRACKING UNAVAILABLE"
                         picked -> "YOUR SUBJECT"
                         area != null -> "SUBJECT TRACKED"
@@ -284,24 +284,34 @@ fun CameraScreen(
                             files = files,
                             onSaved = { saved ->
                                 scope.launch {
-                                    val selected = try {
-                                        val aiPick = if (cloudOn) actionClient.choose(saved) else null
-                                        aiPick?.takeIf { it.source == "gemini" }
-                                            ?.index?.takeIf { it in saved.indices }
-                                            ?: actionClient.localBest(saved)
+                                    try {
+                                        val selected = if (cloudOn) {
+                                            val pick = actionClient.choose(saved)
+                                            if (pick == null || pick.source != "gemini") {
+                                                error = "AI could not check this burst. Retry, or turn AI off for local selection. Originals are retained in app storage."
+                                                return@launch
+                                            }
+                                            if (!pick.usable) {
+                                                error = "No clear action shot: ${pick.reason} Try brighter light and keep the subject in focus. Originals are retained in app storage."
+                                                return@launch
+                                            }
+                                            pick.index
+                                        } else actionClient.localBest(saved)
+                                        val chosen = saved[selected]
+                                        onCaptured(chosen, stamp, controller.suggestedLutId, null)
+                                        saved.filterIndexed { index, _ -> index != selected }
+                                            .forEach(File::delete)
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
                                     } catch (_: Exception) {
-                                        saved.size / 2
-                                    }.coerceIn(saved.indices)
-                                    val chosen = saved[selected]
-                                    saved.filterIndexed { index, _ -> index != selected }
-                                        .forEach(File::delete)
-                                    capturing = false
-                                    onCaptured(chosen, stamp, controller.suggestedLutId, null)
+                                        error = "Could not select a frame. Originals are retained in app storage; please retry."
+                                    } finally {
+                                        capturing = false
+                                    }
                                 }
                             },
                             onError = { message ->
                                 capturing = false
-                                files.forEach(File::delete)
                                 error = message
                             },
                         )
@@ -323,6 +333,7 @@ fun CameraScreen(
             CameraToolbar(
                 mode, frameRatio, guided, cloudOn, client.enabled, orientationDegrees,
                 onMode = { choice ->
+                    if (capturing) return@CameraToolbar
                     if (choice != CompositionMode.SUBJECT) controller.clearSubjectSelection()
                     mode = choice
                     area = null
@@ -331,9 +342,9 @@ fun CameraScreen(
                     aiFailed = false
                     aiReply = null
                 },
-                onRatio = { ratioName = it.name },
+                onRatio = { if (!capturing) ratioName = it.name },
                 onGuide = { guided = !guided },
-                onCloud = { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ },
+                onCloud = { if (!capturing) { cloudOn = !cloudOn; aiReply = null; aiFailed = false; modeGeneration++ } },
                 showLightingMap = showLightingMap,
                 onLightingMap = { showLightingMap = !showLightingMap },
             )
@@ -487,7 +498,7 @@ private fun CaptureDeck(
             }
             GuidanceCard(hint)
             if (mode == CompositionMode.ACTION && capturing) {
-                Text("Capturing five frames and choosing the best moment…",
+                Text("Metering light, capturing eight frames, then checking the burst…",
                     color = FrameGold, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             }
         } else {
@@ -549,7 +560,7 @@ private fun modeDescription(mode: CompositionMode): String = when (mode) {
     CompositionMode.ACTION -> "Burst and keep the best moment"
 }
 
-private const val ACTION_BURST_SIZE = 5
+private const val ACTION_BURST_SIZE = 8
 
 @Composable
 private fun GuidanceCard(hint: FramingHint) {

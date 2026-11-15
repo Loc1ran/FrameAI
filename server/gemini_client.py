@@ -154,22 +154,26 @@ COACH_SCHEMA = {
 
 ACTION_PROMPT = (
     "You are FrameAI selecting one photograph from a short chronological action burst. "
-    "Compare every supplied frame. Choose the frame with the strongest meaningful action moment, "
-    "then prefer a sharp main subject, visible face/eyes when relevant, complete important body parts "
+    "Compare every supplied frame. First require a sharp moving main subject: a sharp stationary "
+    "background does not make a blurred bottle, car, or other moving subject usable. Among usable "
+    "frames choose the strongest meaningful action moment, visible face/eyes when relevant, complete important body parts "
     "and equipment, and a composition that preserves the direction of movement. Reject frames with "
-    "obvious accidental blur, blocked subjects, or important clipping. Motion blur may be intentional "
-    "only when the subject remains readable. Do not invent details outside the images. "
-    "Return the zero-based selectedIndex, one reason under 160 characters, and source=gemini."
+    "obvious accidental blur, blocked subjects, or important clipping. This mode aims to freeze the "
+    "subject, not create intentional subject motion blur. If every subject is blurred or you cannot "
+    "confidently assess subject sharpness, return usable=false and explain why. Still return the "
+    "least-bad selectedIndex for reference; it will not be automatically kept. Do not invent details "
+    "outside the images. Return usable, the zero-based selectedIndex, one reason under 160 characters, and source=gemini."
 )
 
 ACTION_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "selectedIndex": {"type": "INTEGER"},
+        "usable": {"type": "BOOLEAN"},
         "reason": {"type": "STRING"},
         "source": {"type": "STRING", "enum": ["gemini"]},
     },
-    "required": ["selectedIndex", "reason", "source"],
+    "required": ["selectedIndex", "usable", "reason", "source"],
 }
 
 
@@ -273,10 +277,17 @@ def select_action_best(images: list[bytes], api_key: str, model_id: str) -> dict
     if not text:
         raise ValueError("empty model response")
     result = json.loads(text)
+    return normalize_action_pick(result, len(images))
+
+
+def normalize_action_pick(result: dict, frame_count: int) -> dict:
     index = result.get("selectedIndex")
     reason = result.get("reason")
-    if not isinstance(index, int) or index not in range(len(images)):
+    usable = result.get("usable")
+    if type(index) is not int or index not in range(frame_count):
         raise ValueError("selectedIndex outside burst")
+    if type(usable) is not bool:
+        raise ValueError("missing or invalid action usability")
     if not isinstance(reason, str) or not 1 <= len(reason) <= 160:
         raise ValueError("invalid action reason")
-    return {"selectedIndex": index, "reason": reason, "source": "gemini"}
+    return {"selectedIndex": index, "usable": usable, "reason": reason, "source": "gemini"}
