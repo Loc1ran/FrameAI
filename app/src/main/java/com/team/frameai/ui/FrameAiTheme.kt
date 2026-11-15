@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 
 internal val FrameGold = Color(0xFFE4B15A)
 internal val FrameInk = Color(0xFF090909)
+internal val FrameSurface = Color(0xFF1C201F)
 internal val FramePaper = Color(0xFFF3EEE4)
 internal val FrameReady = Color(0xFF8FD0A8)
 internal val FrameMuted = Color(0xFFB7B1A6)
@@ -20,6 +21,11 @@ private val Scheme = darkColorScheme(
     surface = Color(0xFF141414),
     onSurface = FramePaper,
     secondary = FrameMuted,
+    secondaryContainer = Color(0xFF3B3020),
+    onSecondaryContainer = FrameGold,
+    surfaceVariant = FrameSurface,
+    onSurfaceVariant = FrameMuted,
+    outline = Color(0xFF545850),
 )
 
 @Composable

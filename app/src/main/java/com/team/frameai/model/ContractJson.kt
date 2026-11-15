@@ -20,6 +20,10 @@ object ContractJson {
         return guide
     }
 
+    fun parseLiveCoach(raw: String): LiveCoach {
+        return json.decodeFromString(LiveCoach.serializer(), raw)
+    }
+
     fun parseShotReview(raw: String): ShotReview {
         val review = json.decodeFromString(ShotReview.serializer(), raw)
         require(review.sceneType in SCENE_TYPES) { "sceneType" }

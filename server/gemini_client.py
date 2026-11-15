@@ -58,6 +58,7 @@ COACH_PROMPT = (
     "message is one beginner instruction under 120 characters. "
     "Do not say move left or move right. Zoom, horizon, closer, and farther are allowed. "
     "Do not invent people or places that are not visible. "
+    "suggestedLutId must be warm_film for warm light, cool_cinema for cool light, or none when the light is mixed. "
     "Set source to gemini."
 )
 
@@ -78,6 +79,7 @@ COACH_SCHEMA = {
         "subjectX": {"type": "NUMBER"},
         "subjectY": {"type": "NUMBER"},
         "isReady": {"type": "BOOLEAN"},
+        "suggestedLutId": {"type": "STRING", "enum": ["warm_film", "cool_cinema", "none"]},
         "source": {"type": "STRING", "enum": ["gemini"]},
     },
     "required": [
@@ -90,6 +92,7 @@ COACH_SCHEMA = {
         "targetX",
         "targetY",
         "isReady",
+        "suggestedLutId",
         "source",
     ],
 }

@@ -24,6 +24,10 @@ class ContractJsonTest {
         assertEquals("demo_mock", review.source)
         val offline = ContractJson.parseShotReview(contract("shot-review.offline.json"))
         assertEquals("offline_rules", offline.source)
+        val coach = ContractJson.parseLiveCoach(contract("live-coach.mock.json"))
+        assertEquals("warm_film", coach.suggestedLutId)
+        assertEquals("demo_mock", coach.source)
+        assertEquals("in", coach.zoom)
     }
 
     @Test

@@ -1,34 +1,34 @@
 package com.team.frameai.camera
 
-import androidx.camera.core.ImageProxy
-import androidx.camera.view.PreviewView
 import androidx.camera.view.TransformExperimental
 import androidx.camera.view.transform.CoordinateTransform
-import androidx.camera.view.transform.ImageProxyTransformFactory
+import androidx.camera.view.transform.OutputTransform
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.model.RawFaceBox
 import kotlin.math.max
 import kotlin.math.min
 
 object AnalysisCoordinateMapper {
-    @OptIn(TransformExperimental::class)
-    fun map(image: ImageProxy, preview: PreviewView, raw: RawFaceBox): FaceBoxNormalized? {
-        if (preview.width == 0 || preview.height == 0) return null
-        val target = preview.outputTransform ?: return null
-        val source = ImageProxyTransformFactory().apply {
-            isUsingRotationDegrees = true
-        }.getOutputTransform(image)
+    @androidx.annotation.OptIn(markerClass = [TransformExperimental::class])
+    fun map(
+        source: OutputTransform,
+        target: OutputTransform,
+        imageWidth: Int,
+        imageHeight: Int,
+        viewWidth: Int,
+        viewHeight: Int,
+        raw: RawFaceBox,
+    ): FaceBoxNormalized? {
+        if (viewWidth <= 0 || viewHeight <= 0) return null
         val transform = CoordinateTransform(source, target)
-        val width = image.width.toFloat()
-        val height = image.height.toFloat()
+        val width = imageWidth.toFloat()
+        val height = imageHeight.toFloat()
         val points = floatArrayOf(
             raw.left * width, raw.top * height,
             raw.right * width, raw.bottom * height,
             raw.centerX * width, raw.centerY * height,
         )
         transform.mapPoints(points)
-        val viewWidth = preview.width.toFloat()
-        val viewHeight = preview.height.toFloat()
         fun nx(x: Float) = (x / viewWidth).coerceIn(0f, 1f)
         fun ny(y: Float) = (y / viewHeight).coerceIn(0f, 1f)
         val left = nx(points[0])
