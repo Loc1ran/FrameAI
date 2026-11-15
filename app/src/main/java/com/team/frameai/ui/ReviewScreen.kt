@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -24,6 +25,9 @@ import androidx.compose.ui.unit.sp
 import com.team.frameai.BuildConfig
 import com.team.frameai.camera.ImageSaver
 import com.team.frameai.camera.PhotoGrader
+import com.team.frameai.guide.JournalEntry
+import com.team.frameai.guide.Odyssey
+import com.team.frameai.guide.OdysseyJournal
 import com.team.frameai.lut.LutPack
 import com.team.frameai.model.LiveGuide
 import com.team.frameai.model.ShotReview
@@ -45,6 +49,11 @@ fun ReviewScreen(
     photoGrader: PhotoGrader,
     captureGuide: LiveGuide? = null,
     suggestedLut: String = "warm_film",
+    voyage: Boolean = false,
+    lesson: String = "",
+    trial: String = "",
+    skill: String = "",
+    styleLabel: String = "Auto",
     onRetake: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -89,18 +98,20 @@ fun ReviewScreen(
             status = "Could not open this photo. Return to the camera to try again."
             return@LaunchedEffect
         }
-        var chosen = reviewLookIds(emptyList(), suggestedLut.takeIf { it in LutPack.ids })
+        var chosen = if (voyage) Odyssey.lookIds else reviewLookIds(emptyList(), suggestedLut.takeIf { it in LutPack.ids })
         if (client.cloudConfigured) {
             try {
-                status = "Choosing looks…"
+                status = if (voyage) "Reading the voyage…" else "Choosing looks…"
                 val jpeg = withContext(Dispatchers.Default) { ImageSaver.jpegForReview(decoded) }
                 val review = client.review(jpeg, cloudEnabled = true)
                 if (review.source == "gemini") {
-                    val match = review.suggestedLutId.takeIf { it in LutPack.ids }
+                    val match = review.suggestedLutId.takeIf { it in if (voyage) Odyssey.lookIds.toSet() else LutPack.ids }
                     bestMatch = match
-                    matchReason = review.lutReason.takeIf { match != null }
-                    if (review.candidateLutIds.isNotEmpty()) rankedIds = review.candidateLutIds
-                    chosen = reviewLookIds(review.candidateLutIds, match)
+                    matchReason = if (voyage) match?.let(Odyssey::sentence) else review.lutReason.takeIf { match != null }
+                    if (!voyage && review.candidateLutIds.isNotEmpty()) {
+                        rankedIds = review.candidateLutIds
+                        chosen = reviewLookIds(review.candidateLutIds, match)
+                    }
                 }
             } catch (cancel: CancellationException) {
                 throw cancel
@@ -153,15 +164,30 @@ fun ReviewScreen(
         }
     }
     val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
+    var landed by remember(originalPath) { mutableStateOf(false) }
+    LaunchedEffect(voyage, bestMatch, variants.size) {
+        if (!voyage || landed || bestMatch == null || variants.isEmpty()) return@LaunchedEffect
+        val index = variants.indexOfFirst { it.lutId == bestMatch }
+        if (index >= 0) {
+            landed = true
+            pagerState.scrollToPage(index)
+        }
+    }
     val current = pages.getOrNull(pagerState.currentPage)
     val onOriginal = current == null || current.lutId == ORIGINAL_PAGE
     val outputLabel = if (onOriginal) "original" else "edit"
-    val currentName = if (current == null || current.lutId == ORIGINAL_PAGE) "Original" else lutLabel(current.lutId)
+    val currentName = when {
+        current == null -> "Original"
+        current.lutId == ORIGINAL_PAGE -> if (voyage) "Ithaca" else "Original"
+        else -> if (voyage) Odyssey.nameOf(current.lutId) ?: lutLabel(current.lutId) else lutLabel(current.lutId)
+    }
+    val shore = if (voyage && current != null) VoyageTheme.ofLook(current.lutId) else null
+    val voyageIds = if (voyage) Odyssey.lookIds + ORIGINAL_PAGE else emptyList()
 
     val photo: @Composable (Modifier) -> Unit = { modifier ->
         Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(currentName, color = FramePaper, modifier = Modifier.weight(1f))
+                Text(currentName, color = shore?.light ?: FramePaper, modifier = Modifier.weight(1f))
                 if (pages.size > 1) {
                     Text(
                         "${pagerState.currentPage + 1} / ${pages.size}",
@@ -177,12 +203,24 @@ fun ReviewScreen(
             ) { page ->
                 val item = pages.getOrNull(page)
                 Box(
-                    Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).background(FrameSurface),
+                    Modifier.fillMaxSize()
+                        .then(
+                            if (shore != null) Modifier.border(
+                                3.dp,
+                                VoyageTheme.ofLook(item?.lutId ?: ORIGINAL_PAGE).line,
+                                RoundedCornerShape(16.dp),
+                            ) else Modifier,
+                        )
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (shore != null) VoyageTheme.ofLook(item?.lutId ?: ORIGINAL_PAGE).wash else FrameSurface),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (item != null) {
-                        val description = if (item.lutId == ORIGINAL_PAGE) "Original photo"
-                        else "Edited photo, ${lutLabel(item.lutId)}"
+                        val description = if (item.lutId == ORIGINAL_PAGE) {
+                            if (voyage) "Ithaca, unchanged" else "Original photo"
+                        } else {
+                            "Edited photo, ${if (voyage) Odyssey.nameOf(item.lutId) ?: lutLabel(item.lutId) else lutLabel(item.lutId)}"
+                        }
                         Image(
                             bitmap = item.bitmap.asImageBitmap(),
                             contentDescription = description,
@@ -198,13 +236,35 @@ fun ReviewScreen(
     }
     val controls: @Composable (Modifier) -> Unit = { modifier ->
         Column(modifier.verticalScroll(rememberScrollState())) {
-        Text("YOUR LOOKS", color = FrameGold, fontSize = 11.sp)
         Text(
-            "Swipe left or right. Save keeps the picture on screen.",
+            if (shore != null) currentName else "YOUR LOOKS",
+            color = shore?.light ?: FrameGold,
+            fontSize = if (shore != null) 18.sp else 11.sp,
+            fontWeight = if (shore != null) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+        )
+        if (lesson.isNotBlank()) {
+            Text("What changed", color = FrameGold, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+            Text(lesson, color = FramePaper, fontSize = 14.sp)
+        }
+        Text(
+            if (voyage) "Each shore is the same picture. Save keeps the one on screen."
+            else "Swipe left or right. Save keeps the picture on screen.",
             color = FrameMuted,
             fontSize = 12.sp,
         )
-        bestMatch?.let { id ->
+        if (shore != null && current != null) {
+            Text(
+                if (current.lutId == ORIGINAL_PAGE) Odyssey.ITHACA else Odyssey.sentence(current.lutId),
+                color = shore.light,
+                fontSize = 16.sp,
+                lineHeight = 20.sp,
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .background(shore.wash, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
+        } else bestMatch?.let { id ->
             val lead = if (matchReason != null) "Best match" else "From this frame"
             Text(
                 "$lead: ${lutLabel(id)}" + (matchReason?.let { reason -> ". $reason" } ?: ""),
@@ -220,6 +280,7 @@ fun ReviewScreen(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 enabled = current != null && !busy,
+                colors = if (shore != null) ButtonDefaults.buttonColors(containerColor = shore.light, contentColor = FrameInk) else ButtonDefaults.buttonColors(),
                 onClick = {
                     val photo = current
                     busy = true
@@ -239,7 +300,7 @@ fun ReviewScreen(
                         }
                     }
                 },
-            ) { Text("Save $outputLabel") }
+            ) { Text(if (shore != null) "Save this shore" else "Save $outputLabel") }
             OutlinedButton(
                 enabled = current != null && !busy,
                 onClick = {
@@ -261,6 +322,43 @@ fun ReviewScreen(
                     }
                 },
             ) { Text("Share $outputLabel") }
+            OutlinedButton(
+                enabled = current != null && !busy,
+                onClick = {
+                    val photo = current ?: return@OutlinedButton
+                    busy = true
+                    scope.launch {
+                        try {
+                            val file = if (photo.lutId == ORIGINAL_PAGE) File(originalPath) else materializeEdit(photo)
+                            val note = lesson.ifBlank { coaching?.principle ?: "Captured without a trial." }
+                            val feedback = listOf(coaching?.summary, coaching?.improvement)
+                                .filter { !it.isNullOrBlank() }
+                                .joinToString(" ")
+                            withContext(Dispatchers.IO) {
+                                OdysseyJournal(File(context.filesDir, "odyssey/journal.json")).add(
+                                    JournalEntry(
+                                        id = "$capturedAt-${photo.lutId}",
+                                        photoPath = file.absolutePath,
+                                        capturedAt = capturedAt,
+                                        style = styleLabel,
+                                        trial = trial,
+                                        skill = skill,
+                                        lesson = note,
+                                        feedback = feedback,
+                                    ),
+                                )
+                            }
+                            status = "Added to the Odyssey Journal."
+                        } catch (cancel: CancellationException) {
+                            throw cancel
+                        } catch (_: Exception) {
+                            status = "Could not add this photo to the journal."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                },
+            ) { Text("Add to journal") }
         }
         Text(
             if (current == null || current.lutId == ORIGINAL_PAGE) {
@@ -317,13 +415,28 @@ fun ReviewScreen(
 
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(FrameInk).safeDrawingPadding().padding(16.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(shore?.wash ?: FrameInk).safeDrawingPadding().padding(16.dp)) {
         val landscape = maxWidth > maxHeight
         val panelWidth = (maxWidth * 0.44f).coerceIn(280.dp, 380.dp)
         val photoHeight = maxHeight * 0.43f
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Your photo", color = FramePaper, fontSize = 24.sp, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (shore != null) currentName else "Your photo",
+                        color = shore?.light ?: FramePaper,
+                        fontSize = 24.sp,
+                    )
+                    if (shore != null && voyageIds.isNotEmpty()) {
+                        VoyageBeads(
+                            ids = voyageIds,
+                            selected = pagerState.currentPage.coerceAtMost(voyageIds.lastIndex),
+                            onSelect = { index ->
+                                if (index < pages.size) scope.launch { pagerState.animateScrollToPage(index) }
+                            },
+                        )
+                    }
+                }
                 TextButton(enabled = !busy, onClick = onRetake) { Text("Retake") }
             }
             if (landscape) {

@@ -28,24 +28,30 @@ import kotlin.math.hypot
  * The arrow points the way to move the phone, which is opposite the way the subject should slide.
  */
 @Composable
-fun GuideOverlay(
+internal fun GuideOverlay(
     guide: LiveGuide?,
     area: FaceBoxNormalized?,
     enabled: Boolean,
     geometry: SceneGeometry? = null,
+    course: VoyageInk? = null,
+    markReady: Boolean = false,
 ) {
     if (!enabled) return
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
+            val grid = course?.line?.copy(alpha = 0.45f) ?: FrameLine
             listOf(w / 3f, w * 2f / 3f).forEach { x ->
-                drawLine(FrameLine, Offset(x, 0f), Offset(x, h), 1.dp.toPx())
+                drawLine(grid, Offset(x, 0f), Offset(x, h), 1.dp.toPx())
             }
             listOf(h / 3f, h * 2f / 3f).forEach { y ->
-                drawLine(FrameLine, Offset(0f, y), Offset(w, y), 1.dp.toPx())
+                drawLine(grid, Offset(0f, y), Offset(w, y), 1.dp.toPx())
             }
             if (guide == null) return@Canvas
+            val ready = guide.isReady || markReady
+            val readyColor = course?.light ?: FrameReady
+            val aimColor = course?.line ?: FrameGold
             if (guide.hideGoal || LightingAdviceEngine.isCue(guide.message)) {
                 val picture = GuidePicture.of(guide, area)
                 if (area != null && area.width > 0.02f && area.height > 0.02f) {
@@ -57,12 +63,12 @@ fun GuideOverlay(
                 guide.message == GeometryCoach.ROTATE_COUNTERCLOCKWISE ||
                 guide.message == GeometryCoach.CENTER_ANGLE ||
                 guide.message == GeometryCoach.STRAIGHT_ON
-            val accent = if (guide.isReady) FrameReady else FrameGold
+            val accent = if (ready) readyColor else aimColor
             if (geometryCue) {
                 drawGeometry(guide, geometry, accent)
                 val picture = GuidePicture.of(guide, area)
                 if (area != null && area.width > 0.02f && area.height > 0.02f) {
-                    drawSolid(picture.current, if (guide.isReady) FrameReady else FramePaper)
+                    drawSolid(picture.current, if (ready) readyColor else FramePaper)
                 }
                 val rotating = guide.message == GeometryCoach.ROTATE_CLOCKWISE ||
                     guide.message == GeometryCoach.ROTATE_COUNTERCLOCKWISE
@@ -74,21 +80,21 @@ fun GuideOverlay(
                 return@Canvas
             }
             if (guide.subjectX == null && guide.subjectY == null && area == null) {
-                if (guide.isReady) drawCheck(Offset(w / 2f, h / 2f), FrameReady)
+                if (ready) drawCheck(Offset(w / 2f, h / 2f), readyColor)
                 return@Canvas
             }
             val horizon = guide.subjectX == null && guide.subjectY != null
             if (horizon) {
-                drawHorizon(guide, accent)
+                drawHorizon(guide, accent, ready, readyColor)
                 return@Canvas
             }
             val picture = GuidePicture.of(guide, area)
             drawDashed(picture.goal, accent)
             if (area != null && area.width > 0.02f && area.height > 0.02f) {
-                drawSolid(picture.current, if (guide.isReady) FrameReady else FramePaper)
+                drawSolid(picture.current, if (ready) readyColor else FramePaper)
             }
-            if (guide.isReady) {
-                drawCheck(centerOf(picture.goal), FrameReady)
+            if (ready) {
+                drawCheck(centerOf(picture.goal), readyColor)
             } else if (guide.message != GeometryCoach.SEPARATE_SHAPES) {
                 drawCameraArrow(guide, area, accent)
             }
@@ -127,7 +133,7 @@ private fun DrawScope.drawNormLine(line: NormLine, color: Color, dashed: Boolean
     )
 }
 
-private fun DrawScope.drawHorizon(guide: LiveGuide, accent: Color) {
+private fun DrawScope.drawHorizon(guide: LiveGuide, accent: Color, ready: Boolean, readyColor: Color) {
     val w = size.width
     val h = size.height
     val current = guide.subjectY?.toFloat()?.times(h) ?: return
@@ -143,8 +149,8 @@ private fun DrawScope.drawHorizon(guide: LiveGuide, accent: Color) {
         3.dp.toPx(),
         pathEffect = PathEffect.dashPathEffect(floatArrayOf(18.dp.toPx(), 12.dp.toPx())),
     )
-    if (guide.isReady) {
-        drawCheck(Offset(w / 2f, target), FrameReady)
+    if (ready) {
+        drawCheck(Offset(w / 2f, target), readyColor)
     } else {
         val phoneY = (guide.subjectY ?: guide.targetY).toFloat() - guide.targetY.toFloat()
         drawCameraArrow(Offset(w / 2f, current), 0f, phoneY, accent)

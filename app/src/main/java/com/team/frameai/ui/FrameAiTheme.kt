@@ -10,6 +10,7 @@ internal val FrameInk = Color(0xFF090909)
 internal val FrameSurface = Color(0xFF1C201F)
 internal val FramePaper = Color(0xFFF3EEE4)
 internal val FrameReady = Color(0xFF8FD0A8)
+internal val FrameDawn = Color(0xFFE7A08C)
 internal val FrameMuted = Color(0xFFB7B1A6)
 internal val FrameLine = Color(0x66FFFFFF)
 

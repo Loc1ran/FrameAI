@@ -73,10 +73,8 @@ class ResponsiveUiTest {
             val label = compose.onNodeWithText("Subject", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             assertEquals("Label bounds at $angle degrees: $label", angle == 90 || angle == 270, label.height > label.width)
             compose.onNodeWithContentDescription("Camera options").performClick()
-            compose.onNodeWithText("Turn guide off").assertIsDisplayed().performClick()
-            compose.onNodeWithContentDescription("Camera options").performClick()
-            compose.onNodeWithText("Turn guide on").performClick()
-            compose.onNodeWithText("Turn guide on").assertDoesNotExist()
+            compose.onNodeWithText("Odyssey Journal").assertIsDisplayed().performClick()
+            compose.onNodeWithText("Odyssey Journal").assertDoesNotExist()
             screenshot("ui-camera-labels-$angle.png")
         }
         compose.onNodeWithContentDescription("Photo shape").performClick()

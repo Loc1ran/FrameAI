@@ -27,6 +27,7 @@ import com.team.frameai.guide.FrameRect
 import com.team.frameai.guide.GeometryMeasure
 import com.team.frameai.guide.LightingAnalyzer
 import com.team.frameai.guide.LightingMap
+import com.team.frameai.guide.LightingRead
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.guide.ShapeOverlap
 import com.team.frameai.guide.SubjectTap
@@ -62,6 +63,8 @@ class FrameCameraController(context: Context) {
     @Volatile var captureFrames: Boolean = false
     @Volatile var sceneLutAllowed: Boolean = true
     @Volatile var suggestedLutId: String = LutIds.WARM_FILM
+    /** Latest measured light. The journey reads it when a guide update arrives. */
+    @Volatile var latestLighting: LightingRead? = null
 
     init {
         lifecycleController.cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
@@ -344,9 +347,11 @@ class FrameCameraController(context: Context) {
                         null
                     }
                 }
+                latestLighting = scene?.lighting
                 onGuide(guide, mapped, lines, lightingMap, null, subjectTracker.hasSelection)
             } catch (error: Exception) {
                 Log.w("FrameAI", "Preview mapping unavailable", error)
+                latestLighting = null
                 onGuide(
                     staticTargetGuide(),
                     null,
