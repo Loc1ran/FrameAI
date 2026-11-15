@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.team.frameai.guide.GuideEngine
+import com.team.frameai.guide.PortraitFrame
 import com.team.frameai.model.FaceBoxNormalized
 import com.team.frameai.model.LiveGuide
 import kotlin.math.abs
@@ -95,6 +96,15 @@ private fun DrawScope.drawHorizon(guide: LiveGuide, accent: Color) {
 
 private fun goalSlot(guide: LiveGuide, area: FaceBoxNormalized?): NormRect {
     val seen = area?.takeIf { it.width > 0.02f && it.height > 0.02f }
+    if (guide.zoom != null) {
+        val slot = PortraitFrame.goal(
+            guide.targetX.toFloat(),
+            guide.targetY.toFloat(),
+            guide.zoom,
+            seen,
+        )
+        return slotAround(slot.centerX, slot.centerY, slot.width, slot.height)
+    }
     return when (guide.message) {
         GuideEngine.SMALL_MESSAGE -> slotAround(
             seen?.centerX ?: guide.targetX.toFloat(),
