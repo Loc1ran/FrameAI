@@ -2,7 +2,6 @@ package com.team.frameai.lut
 
 import android.content.res.AssetManager
 import android.graphics.Bitmap
-import com.team.frameai.model.LutIds
 
 /**
  * Still-photo grade for the review screen. Call it off the main thread.
@@ -61,10 +60,10 @@ class BitmapLutRepository(
                 .filter { it.endsWith(".cube") }
                 .map { it.removeSuffix(".cube") }
                 .toSet()
-            require(LutIds.CREATIVE.all { it in present }) {
-                "Bundled warm_film and cool_cinema LUTs are missing"
+            require(LutPack.ids.all { it in present }) {
+                "A bundled LUT file is missing"
             }
-            val loaders = LutIds.CREATIVE.associateWith<String, () -> CubeLut> { id ->
+            val loaders = LutPack.ids.associateWith<String, () -> CubeLut> { id ->
                 {
                     assets.open("luts/$id.cube").bufferedReader().use { reader ->
                         parseCube(reader.readText())

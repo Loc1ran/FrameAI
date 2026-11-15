@@ -56,13 +56,13 @@ A, B, and C are three people. Each has six tasks. Developer C is us. We are the 
 2. With no face and a clear horizon, put that horizon on a grid line.
 3. With no face and no horizon, the frame can still be shot. Show the green check, not a sentence.
 4. Draw the horizon as a solid line, a dashed goal line, and the shaded band. The label says Tilt up or Tilt down. Hide the rule-of-thirds grid.
-5. Choose `warm_film` or `cool_cinema` from the light. Test bright sky, an even frame, and warm versus cool.
+5. The on-device light reading may suggest `warm_film` or `cool_cinema`. The review screen can apply any bundled LUT.
 6. Open a pull request. C installs it on the phone.
 
 ## Developer C — us, this PC and the phone
 
 1. Keep the server on this PC. Do not create an API key. Do not turn on pay-as-you-go.
-2. Add `suggestedLutId` (`warm_film`, `cool_cinema`, or `none`) to the live-coach reply.
+2. Add `suggestedLutId` to the live-coach reply. It may be any bundled LUT id, or `none`.
 3. On the phone, send the current frame JPEG to `http://127.0.0.1:8080/v1/live-coach` through the USB tunnel. No key in the app.
 4. On the phone, Zoom in and Zoom out call `setZoomRatio`. Move and hold do not move the lens. If the lens is already at its limit, say Step closer or Step back.
 5. If the server does not answer, keep the on-device coach and label it `offline_rules`. Hold the last Gemini reply for 8 seconds first.

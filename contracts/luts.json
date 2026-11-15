@@ -1,0 +1,688 @@
+{
+  "looks": [
+    {
+      "id": "cool_cinema",
+      "name": "Cool Cinema",
+      "sourceAsset": "cool_cinema.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "warm_film",
+      "name": "Warm Film",
+      "sourceAsset": "warm_film.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "5245exr_color_negative",
+      "name": "5245exr Color Negative",
+      "sourceAsset": "5245exr_color_negative.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "5278_vision_320t",
+      "name": "5278 Vision 320t",
+      "sourceAsset": "5278_vision_320t.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "5278_vision_320t_sat",
+      "name": "5278 Vision 320t Sat",
+      "sourceAsset": "5278_vision_320t_sat.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "5279_7279_vision_500t",
+      "name": "5279 7279 Vision 500t",
+      "sourceAsset": "5279_7279_vision_500t.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "5280_vision_320t",
+      "name": "5280 Vision 320t",
+      "sourceAsset": "5280_vision_320t.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_01",
+      "name": "Cinematic 01",
+      "sourceAsset": "cinematic_01.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_02",
+      "name": "Cinematic 02",
+      "sourceAsset": "cinematic_02.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_03",
+      "name": "Cinematic 03",
+      "sourceAsset": "cinematic_03.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_04",
+      "name": "Cinematic 04",
+      "sourceAsset": "cinematic_04.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_05",
+      "name": "Cinematic 05",
+      "sourceAsset": "cinematic_05.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_06",
+      "name": "Cinematic 06",
+      "sourceAsset": "cinematic_06.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_07",
+      "name": "Cinematic 07",
+      "sourceAsset": "cinematic_07.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_08",
+      "name": "Cinematic 08",
+      "sourceAsset": "cinematic_08.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_09",
+      "name": "Cinematic 09",
+      "sourceAsset": "cinematic_09.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "cinematic_10",
+      "name": "Cinematic 10",
+      "sourceAsset": "cinematic_10.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_5247_100t_process_ecn_2",
+      "name": "Eastman 5247 100t Process Ecn 2",
+      "sourceAsset": "eastman_5247_100t_process_ecn_2.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_color_negative_film_5250",
+      "name": "Eastman Color Negative Film 5250",
+      "sourceAsset": "eastman_color_negative_film_5250.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_color_negative_film_5251_50t",
+      "name": "Eastman Color Negative Film 5251 50t",
+      "sourceAsset": "eastman_color_negative_film_5251_50t.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_color_negative_film_5251_50t_hc",
+      "name": "Eastman Color Negative Film 5251 50t Hc",
+      "sourceAsset": "eastman_color_negative_film_5251_50t_hc.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_color_negative_film_5251_50t_lg",
+      "name": "Eastman Color Negative Film 5251 50t Lg",
+      "sourceAsset": "eastman_color_negative_film_5251_50t_lg.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_color_negative_film_5252_50t_hc",
+      "name": "Eastman Color Negative Film 5252 50t Hc",
+      "sourceAsset": "eastman_color_negative_film_5252_50t_hc.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_color_negative_film_5265",
+      "name": "Eastman Color Negative Film 5265",
+      "sourceAsset": "eastman_color_negative_film_5265.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_ektachrome_warm_7239",
+      "name": "Eastman Ektachrome Warm 7239",
+      "sourceAsset": "eastman_ektachrome_warm_7239.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_kodak_7355_pink_violet",
+      "name": "Eastman Kodak 7355 Pink Violet",
+      "sourceAsset": "eastman_kodak_7355_pink_violet.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_kodak_8100",
+      "name": "Eastman Kodak 8100",
+      "sourceAsset": "eastman_kodak_8100.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_kodak_cr8200",
+      "name": "Eastman Kodak Cr8200",
+      "sourceAsset": "eastman_kodak_cr8200.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_neg_5247_warm",
+      "name": "Eastman Neg 5247 Warm",
+      "sourceAsset": "eastman_neg_5247_warm.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastman_neg_5425yt",
+      "name": "Eastman Neg 5425yt",
+      "sourceAsset": "eastman_neg_5425yt.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastmancolor_negative_5293",
+      "name": "Eastmancolor Negative 5293",
+      "sourceAsset": "eastmancolor_negative_5293.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastmancolor_negative_5295",
+      "name": "Eastmancolor Negative 5295",
+      "sourceAsset": "eastmancolor_negative_5295.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eastmancolor_negative_7291",
+      "name": "Eastmancolor Negative 7291",
+      "sourceAsset": "eastmancolor_negative_7291.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "ektachrome_7252_25t",
+      "name": "Ektachrome 7252 25t",
+      "sourceAsset": "ektachrome_7252_25t.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "ektachrome_color_reversal_7252",
+      "name": "Ektachrome Color Reversal 7252",
+      "sourceAsset": "ektachrome_color_reversal_7252.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "ektachrome_color_reversal_film_5285t",
+      "name": "Ektachrome Color Reversal Film 5285t",
+      "sourceAsset": "ektachrome_color_reversal_film_5285t.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eterna_250d_8563",
+      "name": "Eterna 250d 8563",
+      "sourceAsset": "eterna_250d_8563.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eterna_250d_8565",
+      "name": "Eterna 250d 8565",
+      "sourceAsset": "eterna_250d_8565.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "eterna_negative_250t",
+      "name": "Eterna Negative 250t",
+      "sourceAsset": "eterna_negative_250t.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_100t_5545",
+      "name": "EXR 100t 5545",
+      "sourceAsset": "exr_100t_5545.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_500t_7227",
+      "name": "EXR 500t 7227",
+      "sourceAsset": "exr_500t_7227.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_500t_7287",
+      "name": "EXR 500t 7287",
+      "sourceAsset": "exr_500t_7287.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_500t_7290",
+      "name": "EXR 500t 7290",
+      "sourceAsset": "exr_500t_7290.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_500t_7298",
+      "name": "EXR 500t 7298",
+      "sourceAsset": "exr_500t_7298.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_50d_5245",
+      "name": "EXR 50d 5245",
+      "sourceAsset": "exr_50d_5245.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_color_negative_5245",
+      "name": "EXR Color Negative 5245",
+      "sourceAsset": "exr_color_negative_5245.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "exr_color_negative_5454",
+      "name": "EXR Color Negative 5454",
+      "sourceAsset": "exr_color_negative_5454.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "filmtec_101_blue",
+      "name": "Filmtec 101 Blue",
+      "sourceAsset": "filmtec_101_blue.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "filmtec_102_by",
+      "name": "Filmtec 102 By",
+      "sourceAsset": "filmtec_102_by.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fugi_super_f200",
+      "name": "Fugi Super F200",
+      "sourceAsset": "fugi_super_f200.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_ex450",
+      "name": "Fuji Ex450",
+      "sourceAsset": "fuji_ex450.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_ext650",
+      "name": "Fuji Ext650",
+      "sourceAsset": "fuji_ext650.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_int450",
+      "name": "Fuji Int450",
+      "sourceAsset": "fuji_int450.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_superf_8110_lg",
+      "name": "Fuji Superf 8110 Lg",
+      "sourceAsset": "fuji_superf_8110_lg.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_superf_8112",
+      "name": "Fuji Superf 8112",
+      "sourceAsset": "fuji_superf_8112.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_superf_8510",
+      "name": "Fuji Superf 8510",
+      "sourceAsset": "fuji_superf_8510.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_superf_8520",
+      "name": "Fuji Superf 8520",
+      "sourceAsset": "fuji_superf_8520.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "fuji_superf_8530",
+      "name": "Fuji Superf 8530",
+      "sourceAsset": "fuji_superf_8530.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors1",
+      "name": "G Outdoors1",
+      "sourceAsset": "g_outdoors1.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors10",
+      "name": "G Outdoors10",
+      "sourceAsset": "g_outdoors10.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors11",
+      "name": "G Outdoors11",
+      "sourceAsset": "g_outdoors11.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors12",
+      "name": "G Outdoors12",
+      "sourceAsset": "g_outdoors12.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors13",
+      "name": "G Outdoors13",
+      "sourceAsset": "g_outdoors13.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors14",
+      "name": "G Outdoors14",
+      "sourceAsset": "g_outdoors14.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors15",
+      "name": "G Outdoors15",
+      "sourceAsset": "g_outdoors15.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors16",
+      "name": "G Outdoors16",
+      "sourceAsset": "g_outdoors16.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors17",
+      "name": "G Outdoors17",
+      "sourceAsset": "g_outdoors17.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors18",
+      "name": "G Outdoors18",
+      "sourceAsset": "g_outdoors18.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors19",
+      "name": "G Outdoors19",
+      "sourceAsset": "g_outdoors19.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors2",
+      "name": "G Outdoors2",
+      "sourceAsset": "g_outdoors2.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors20",
+      "name": "G Outdoors20",
+      "sourceAsset": "g_outdoors20.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors21",
+      "name": "G Outdoors21",
+      "sourceAsset": "g_outdoors21.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors22",
+      "name": "G Outdoors22",
+      "sourceAsset": "g_outdoors22.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors23",
+      "name": "G Outdoors23",
+      "sourceAsset": "g_outdoors23.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors24",
+      "name": "G Outdoors24",
+      "sourceAsset": "g_outdoors24.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors25",
+      "name": "G Outdoors25",
+      "sourceAsset": "g_outdoors25.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors26",
+      "name": "G Outdoors26",
+      "sourceAsset": "g_outdoors26.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors27",
+      "name": "G Outdoors27",
+      "sourceAsset": "g_outdoors27.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors28",
+      "name": "G Outdoors28",
+      "sourceAsset": "g_outdoors28.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors29",
+      "name": "G Outdoors29",
+      "sourceAsset": "g_outdoors29.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors3",
+      "name": "G Outdoors3",
+      "sourceAsset": "g_outdoors3.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors30",
+      "name": "G Outdoors30",
+      "sourceAsset": "g_outdoors30.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors31",
+      "name": "G Outdoors31",
+      "sourceAsset": "g_outdoors31.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors4",
+      "name": "G Outdoors4",
+      "sourceAsset": "g_outdoors4.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors5",
+      "name": "G Outdoors5",
+      "sourceAsset": "g_outdoors5.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors6",
+      "name": "G Outdoors6",
+      "sourceAsset": "g_outdoors6.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors7",
+      "name": "G Outdoors7",
+      "sourceAsset": "g_outdoors7.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors8",
+      "name": "G Outdoors8",
+      "sourceAsset": "g_outdoors8.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "g_outdoors9",
+      "name": "G Outdoors9",
+      "sourceAsset": "g_outdoors9.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "kodachrome_color_reversal_film_5269",
+      "name": "Kodachrome Color Reversal Film 5269",
+      "sourceAsset": "kodachrome_color_reversal_film_5269.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "kodachrome_color_reversal_film_t550",
+      "name": "Kodachrome Color Reversal Film T550",
+      "sourceAsset": "kodachrome_color_reversal_film_t550.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "kodak_4_x_reversal_film_7277",
+      "name": "Kodak 4 X Reversal Film 7277",
+      "sourceAsset": "kodak_4_x_reversal_film_7277.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "kodak_4_x_reversal_film_7277_2",
+      "name": "Kodak 4 X Reversal Film 7277 2",
+      "sourceAsset": "kodak_4_x_reversal_film_7277_2.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "kodak_clean",
+      "name": "Kodak Clean",
+      "sourceAsset": "kodak_clean.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "kodak_ex250ng",
+      "name": "Kodak Ex250ng",
+      "sourceAsset": "kodak_ex250ng.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "kodak_filmsat_t101",
+      "name": "Kodak Filmsat T101",
+      "sourceAsset": "kodak_filmsat_t101.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "vision2_color_negative_7255",
+      "name": "Vision2 Color Negative 7255",
+      "sourceAsset": "vision2_color_negative_7255.cube",
+      "phoneJpeg": true
+    },
+    {
+      "id": "alexa_logc_to_rec709",
+      "name": "Alexa Logc To Rec709",
+      "sourceAsset": "alexa_logc_to_rec709.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "blackmagic_4k_film_to_rec709",
+      "name": "Blackmagic 4k Film To Rec709",
+      "sourceAsset": "blackmagic_4k_film_to_rec709.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "blackmagic_4k_film_to_rec709_v2",
+      "name": "Blackmagic 4k Film To Rec709 V2",
+      "sourceAsset": "blackmagic_4k_film_to_rec709_v2.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "blackmagic_film_to_rec709",
+      "name": "Blackmagic Film To Rec709",
+      "sourceAsset": "blackmagic_film_to_rec709.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "blackmagic_film_to_rec709_v2",
+      "name": "Blackmagic Film To Rec709 V2",
+      "sourceAsset": "blackmagic_film_to_rec709_v2.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "bm_ursamini4_6k_film",
+      "name": "BM Ursamini4 6k Film",
+      "sourceAsset": "bm_ursamini4_6k_film.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "bm_ursamini4_6k_prores",
+      "name": "BM Ursamini4 6k Prores",
+      "sourceAsset": "bm_ursamini4_6k_prores.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "bmcc2_5k",
+      "name": "Bmcc2 5k",
+      "sourceAsset": "bmcc2_5k.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "bmcc4k",
+      "name": "Bmcc4k",
+      "sourceAsset": "bmcc4k.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "bmccpocket",
+      "name": "Bmccpocket",
+      "sourceAsset": "bmccpocket.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "canon_log_cingamut_rec709_wdr",
+      "name": "Canon Log Cingamut Rec709 Wdr",
+      "sourceAsset": "canon_log_cingamut_rec709_wdr.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "canon_log_rec709_wdr",
+      "name": "Canon Log Rec709 Wdr",
+      "sourceAsset": "canon_log_rec709_wdr.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "canon_log2_cingamut_rec709_wdr",
+      "name": "Canon Log2 Cingamut Rec709 Wdr",
+      "sourceAsset": "canon_log2_cingamut_rec709_wdr.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "canon_log2_rec709_wdr",
+      "name": "Canon Log2 Rec709 Wdr",
+      "sourceAsset": "canon_log2_rec709_wdr.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "cinestyle_s_curve",
+      "name": "Cinestyle S Curve",
+      "sourceAsset": "cinestyle_s_curve.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "dji_inspire_log_to_rec709",
+      "name": "DJI Inspire Log To Rec709",
+      "sourceAsset": "dji_inspire_log_to_rec709.cube",
+      "phoneJpeg": false
+    },
+    {
+      "id": "gh4_cinelike_d_to_rec709",
+      "name": "Gh4 Cinelike D To Rec709",
+      "sourceAsset": "gh4_cinelike_d_to_rec709.cube",
+      "phoneJpeg": false
+    }
+  ]
+}

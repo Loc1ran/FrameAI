@@ -27,7 +27,7 @@ object ContractJson {
     fun parseShotReview(raw: String): ShotReview {
         val review = json.decodeFromString(ShotReview.serializer(), raw)
         require(review.sceneType in SCENE_TYPES) { "sceneType" }
-        require(review.suggestedLutId in LUT_IDS) { "suggestedLutId" }
+        require(review.suggestedLutId in LutIds.SUGGESTABLE) { "suggestedLutId" }
         require(review.source in SOURCES) { "source" }
         require(review.summary.length <= 200) { "summary" }
         require(review.improvement.length <= 200) { "improvement" }
@@ -38,6 +38,5 @@ object ContractJson {
 
     private val GUIDE_KINDS = setOf("ALIGN_SUBJECT", "READY", "NO_FACE")
     private val SCENE_TYPES = setOf("portrait", "landscape", "street", "other")
-    private val LUT_IDS = setOf("warm_film", "cool_cinema", "none")
     private val SOURCES = setOf("offline_rules", "demo_mock", "gemini")
 }

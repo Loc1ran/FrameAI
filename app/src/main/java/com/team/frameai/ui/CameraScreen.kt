@@ -113,7 +113,7 @@ fun CameraScreen(
                         aiFailed = reply == null
                         aiReplyAt = SystemClock.elapsedRealtime()
                         aiStatus = if (reply == null) "AI unavailable. You can still take a photo." else ""
-                        if (reply?.suggestedLutId in listOf("warm_film", "cool_cinema")) {
+                        if (reply?.suggestedLutId in com.team.frameai.lut.LutPack.ids) {
                             controller.suggestedLutId = reply!!.suggestedLutId
                         }
                     }

@@ -1,6 +1,7 @@
 package com.team.frameai.ui
 
 import android.content.Context
+import com.team.frameai.lut.LutPack
 import com.team.frameai.model.ContractJson
 import com.team.frameai.model.LiveGuide
 import com.team.frameai.model.ShotReview
@@ -27,9 +28,7 @@ internal fun sourceLabel(source: String): String = when (source) {
     else -> "Frame check"
 }
 
-internal fun lutLabel(lutId: String): String = when (lutId) {
-    "warm_film" -> "Warm Film"
-    "cool_cinema" -> "Cool Cinema"
-    "none" -> "None"
-    else -> lutId
+internal fun lutLabel(lutId: String): String {
+    if (lutId == "none") return "None"
+    return LutPack.looks.firstOrNull { it.id == lutId }?.name ?: lutId
 }

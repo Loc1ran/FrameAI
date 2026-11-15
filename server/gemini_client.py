@@ -12,11 +12,23 @@ REFERENCES = json.loads((Path(__file__).resolve().parent / "references.json").re
 REFERENCE_TEXT = "\n".join(
     f"- {card['id']} ({card['sceneType']}): {card['pattern']}" for card in REFERENCES
 )
+LUT_LOOKS = json.loads(
+    (Path(__file__).resolve().parents[1] / "contracts" / "luts.json").read_text(encoding="utf-8")
+)["looks"]
+LUT_IDS = [item["id"] for item in LUT_LOOKS] + ["none"]
+LUT_GUIDE = (
+    "The picture is a normal phone JPEG in Rec.709. "
+    "suggestedLutId must be the single best grade for the color and subject in this picture, or none to leave the color unchanged.\n"
+    "Phone-photo looks:\n"
+    + "\n".join(f"- {item['id']}: {item['name']}" for item in LUT_LOOKS if item["phoneJpeg"])
+    + "\nCamera-log conversions are the wrong grade for a phone JPEG. Do not choose one:\n"
+    + "\n".join(f"- {item['id']}: {item['name']}" for item in LUT_LOOKS if not item["phoneJpeg"])
+)
 
 PROMPT = (
     "You are FrameAI, a photography coach looking at one still photo. "
     "Return JSON only. sceneType must be portrait, landscape, street, or other. "
-    "suggestedLutId must be warm_film, cool_cinema, or none. "
+    f"{LUT_GUIDE}\n"
     "Give one specific composition improvement a beginner can try on the next frame. "
     "Do not invent people, locations, or camera settings that are not visible. "
     "Do not claim the phone moved. "
@@ -31,7 +43,7 @@ GEMINI_SCHEMA = {
         "summary": {"type": "STRING"},
         "improvement": {"type": "STRING"},
         "principle": {"type": "STRING"},
-        "suggestedLutId": {"type": "STRING", "enum": ["warm_film", "cool_cinema", "none"]},
+        "suggestedLutId": {"type": "STRING", "enum": LUT_IDS},
         "lutReason": {"type": "STRING"},
         "source": {"type": "STRING", "enum": ["gemini"]},
     },
@@ -58,7 +70,7 @@ COACH_PROMPT = (
     "message is one beginner instruction under 120 characters. "
     "Do not say move left or move right. Zoom, horizon, closer, and farther are allowed. "
     "Do not invent people or places that are not visible. "
-    "suggestedLutId must be warm_film for warm light, cool_cinema for cool light, or none when the light is mixed. "
+    f"{LUT_GUIDE}\n"
     "Set source to gemini."
 )
 
@@ -83,7 +95,8 @@ SCENE_PROMPT = (
     "Use zoom=hold and targetZoomRatio=1: scene advice guides physical movement without moving the lens. "
     "targetX and targetY describe the group's current center, not a forced centering destination. "
     "isReady means the visible composition needs no clear adjustment, not objective aesthetic perfection. "
-    "suggestedLutId is warm_film, cool_cinema, or none based on visible light; source is gemini. "
+    f"{LUT_GUIDE}\n"
+    "Set source to gemini. "
     f"Supported patterns:\n{REFERENCE_TEXT}"
 )
 
@@ -104,7 +117,7 @@ COACH_SCHEMA = {
         "subjectX": {"type": "NUMBER"},
         "subjectY": {"type": "NUMBER"},
         "isReady": {"type": "BOOLEAN"},
-        "suggestedLutId": {"type": "STRING", "enum": ["warm_film", "cool_cinema", "none"]},
+        "suggestedLutId": {"type": "STRING", "enum": LUT_IDS},
         "source": {"type": "STRING", "enum": ["gemini"]},
     },
     "required": [

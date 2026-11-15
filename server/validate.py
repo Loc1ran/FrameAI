@@ -19,6 +19,10 @@ def _local_schema(name: str) -> dict:
     return schema
 
 
+LUT_IDS = {
+    item["id"]
+    for item in json.loads((CONTRACTS / "luts.json").read_text(encoding="utf-8"))["looks"]
+} | {"none"}
 SHOT_REVIEW_SCHEMA = _local_schema("shot-review.schema.json")
 LIVE_GUIDE_SCHEMA = _local_schema("live-guide.schema.json")
 LIVE_COACH_SCHEMA = _local_schema("live-coach.schema.json")
@@ -85,7 +89,7 @@ def normalize_live_coach(payload: object) -> dict:
         cleaned["subjectX"] = None
     if "subjectY" not in cleaned:
         cleaned["subjectY"] = None
-    if cleaned.get("suggestedLutId") not in {"warm_film", "cool_cinema", "none"}:
+    if cleaned.get("suggestedLutId") not in LUT_IDS:
         cleaned["suggestedLutId"] = "none"
     return validate_live_coach(cleaned)
 
