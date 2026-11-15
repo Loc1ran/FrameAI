@@ -12,6 +12,7 @@ data class ShotReview(
     val suggestedLutId: String,
     val lutReason: String,
     val source: String,
+    val candidateLutIds: List<String> = emptyList(),
 ) {
     init {
         require(sceneType in SCENE_TYPES) { "Unsupported sceneType: $sceneType" }
@@ -21,6 +22,9 @@ data class ShotReview(
         require(principle.length in 1..80)
         require(lutReason.length in 1..160)
         require(source in SOURCES) { "Unsupported source: $source" }
+        require(candidateLutIds.size <= 10) { "candidateLutIds" }
+        require(candidateLutIds.distinct().size == candidateLutIds.size) { "candidateLutIds" }
+        require(candidateLutIds.all { it in LutIds.SUGGESTABLE && it != LutIds.NONE }) { "candidateLutIds" }
     }
 
     companion object {

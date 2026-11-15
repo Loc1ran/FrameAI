@@ -20,18 +20,18 @@ class LiveCoachClient(
 ) {
     val enabled: Boolean get() = baseUrl.isNotBlank() && demoToken.isNotBlank()
 
-    suspend fun coach(jpeg: ByteArray, scene: Boolean = false): LiveCoach? {
+    suspend fun coach(jpeg: ByteArray, scene: Boolean = false, instruction: String = ""): LiveCoach? {
         if (!enabled) return null
         return try {
             withTimeout(12_000) {
-                withContext(Dispatchers.IO) { post(jpeg, scene) }
+                withContext(Dispatchers.IO) { post(jpeg, scene, instruction) }
             }
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun post(jpeg: ByteArray, scene: Boolean): LiveCoach? {
+    private fun post(jpeg: ByteArray, scene: Boolean, instruction: String): LiveCoach? {
         val composition = if (scene) "scene" else "subject"
         val endpoint = baseUrl.trimEnd('/') + "/v1/live-coach?composition=$composition"
         val boundary = "frameai-" + UUID.randomUUID()
@@ -45,7 +45,7 @@ class LiveCoachClient(
             setRequestProperty("X-Demo-Token", demoToken)
         }
         try {
-            connection.outputStream.use { it.write(multipart(jpeg, boundary)) }
+            connection.outputStream.use { it.write(multipart(jpeg, boundary, instruction)) }
             if (connection.responseCode != 200) return null
             if (scene && connection.getHeaderField("X-FrameAI-Composition") != "scene") return null
             val body = connection.inputStream.bufferedReader().use { it.readText() }
@@ -56,7 +56,7 @@ class LiveCoachClient(
         }
     }
 
-    private fun multipart(jpeg: ByteArray, boundary: String): ByteArray {
+    private fun multipart(jpeg: ByteArray, boundary: String, instruction: String): ByteArray {
         val out = ByteArrayOutputStream()
         val header = buildString {
             append("--").append(boundary).append("\r\n")
@@ -65,6 +65,15 @@ class LiveCoachClient(
         }
         out.write(header.toByteArray(Charsets.UTF_8))
         out.write(jpeg)
+        val move = instruction.replace("\r", " ").replace("\n", " ").trim().take(120)
+        if (move.isNotEmpty()) {
+            val field = buildString {
+                append("\r\n--").append(boundary).append("\r\n")
+                append("Content-Disposition: form-data; name=\"instruction\"\r\n\r\n")
+                append(move)
+            }
+            out.write(field.toByteArray(Charsets.UTF_8))
+        }
         out.write("\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8))
         return out.toByteArray()
     }

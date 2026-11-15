@@ -25,7 +25,7 @@ Package: `com.team.frameai` · minSdk 26
 
 ## LUT catalog
 
-Every `.cube` in `app/src/main/assets/luts` except `identity_4` can be applied on the review screen, one look at a time. Save writes the look that is on screen. Gemini chooses one id for the current photo. Phone-photo looks are preferred. Camera-log conversions stay in the list, and `none` leaves the color unchanged. Review strength is 0.85.
+Gemini ranks the 10 best phone-photo looks for the current picture. Review shows that row and scrolls sideways. Apply one look at a time, and save writes the look on screen. `none` leaves the color unchanged. Review strength is 0.85.
 
 ## Quick start (Android Studio)
 

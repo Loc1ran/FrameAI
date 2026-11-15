@@ -16,10 +16,10 @@ import threading
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile, Response
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile, Response
 
 from gemini_client import GeminiNotConfigured, coach_image, review_image
-from validate import load_json, validate_live_coach, validate_shot_review
+from validate import align_live_coach, load_json, validate_live_coach, validate_shot_review
 
 MAX_BYTES = 2 * 1024 * 1024
 JPEG_TYPES = {"image/jpeg", "image/jpg", "application/octet-stream"}
@@ -120,6 +120,7 @@ async def shot_review(
 async def live_coach(
     response: Response,
     composition: Literal["subject", "scene"] = "subject",
+    instruction: str = Form(default=""),
     image: UploadFile = File(...),
     x_demo_token: str | None = Header(default=None),
 ) -> dict:
@@ -143,7 +144,12 @@ async def live_coach(
     try:
         model_id = os.environ.get("MODEL_ID", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        return coach_image(payload, api_key, model_id, composition="scene") if composition == "scene" else coach_image(payload, api_key, model_id)
+        if composition == "scene":
+            return coach_image(payload, api_key, model_id, composition="scene")
+        return align_live_coach(
+            coach_image(payload, api_key, model_id, instruction=instruction),
+            instruction,
+        )
     except GeminiNotConfigured:
         raise HTTPException(status_code=503, detail="AI is not configured")
     except Exception as exc:

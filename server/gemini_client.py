@@ -16,19 +16,30 @@ LUT_LOOKS = json.loads(
     (Path(__file__).resolve().parents[1] / "contracts" / "luts.json").read_text(encoding="utf-8")
 )["looks"]
 LUT_IDS = [item["id"] for item in LUT_LOOKS] + ["none"]
+PHONE_LOOKS = [item for item in LUT_LOOKS if item["phoneJpeg"]]
+PHONE_LUT_IDS = [item["id"] for item in PHONE_LOOKS]
 LUT_GUIDE = (
     "The picture is a normal phone JPEG in Rec.709. "
     "suggestedLutId must be the single best grade for the color and subject in this picture, or none to leave the color unchanged.\n"
     "Phone-photo looks:\n"
-    + "\n".join(f"- {item['id']}: {item['name']}" for item in LUT_LOOKS if item["phoneJpeg"])
+    + "\n".join(f"- {item['id']}: {item['name']}" for item in PHONE_LOOKS)
     + "\nCamera-log conversions are the wrong grade for a phone JPEG. Do not choose one:\n"
     + "\n".join(f"- {item['id']}: {item['name']}" for item in LUT_LOOKS if not item["phoneJpeg"])
+)
+SHOT_LUT_GUIDE = (
+    "The picture is a normal phone JPEG in Rec.709. "
+    "Choose the 10 phone-photo looks that best fit this picture and put the best first. "
+    "Return only those ids in candidateLutIds. Do not repeat an id and do not return more than 10. "
+    "suggestedLutId is the first of those ids, or none when the color should stay unchanged. "
+    "Do not choose a camera-log conversion.\n"
+    "Phone-photo looks:\n"
+    + "\n".join(f"- {item['id']}: {item['name']}" for item in PHONE_LOOKS)
 )
 
 PROMPT = (
     "You are FrameAI, a photography coach looking at one still photo. "
     "Return JSON only. sceneType must be portrait, landscape, street, or other. "
-    f"{LUT_GUIDE}\n"
+    f"{SHOT_LUT_GUIDE}\n"
     "Give one specific composition improvement a beginner can try on the next frame. "
     "Do not invent people, locations, or camera settings that are not visible. "
     "Do not claim the phone moved. "
@@ -43,7 +54,12 @@ GEMINI_SCHEMA = {
         "summary": {"type": "STRING"},
         "improvement": {"type": "STRING"},
         "principle": {"type": "STRING"},
-        "suggestedLutId": {"type": "STRING", "enum": LUT_IDS},
+        "suggestedLutId": {"type": "STRING"},
+        "candidateLutIds": {
+            "type": "ARRAY",
+            "maxItems": 10,
+            "items": {"type": "STRING"},
+        },
         "lutReason": {"type": "STRING"},
         "source": {"type": "STRING", "enum": ["gemini"]},
     },
@@ -53,6 +69,7 @@ GEMINI_SCHEMA = {
         "improvement",
         "principle",
         "suggestedLutId",
+        "candidateLutIds",
         "lutReason",
         "source",
     ],
@@ -177,15 +194,30 @@ def review_image(image: bytes, api_key: str, model_id: str) -> dict:
     return normalize_gemini_payload(json.loads(text))
 
 
-def coach_image(image: bytes, api_key: str, model_id: str, composition: str = "subject") -> dict:
+def coach_image(
+    image: bytes,
+    api_key: str,
+    model_id: str,
+    composition: str = "subject",
+    instruction: str = "",
+) -> dict:
     client = _client(api_key)
     from google.genai import types
 
+    prompt = SCENE_PROMPT if composition == "scene" else COACH_PROMPT
+    move = " ".join(instruction.split())[:120]
+    if composition != "scene" and move:
+        prompt += (
+            " The on-device guide already chose the move. "
+            f"The message must start with this exact instruction: {move} "
+            "Do not recommend a different move, direction, zoom, or horizon. "
+            "You may add one short reason after that sentence. Keep the full message under 120 characters."
+        )
     response = client.models.generate_content(
         model=model_id,
         contents=[
             types.Part.from_bytes(data=image, mime_type="image/jpeg"),
-            SCENE_PROMPT if composition == "scene" else COACH_PROMPT,
+            prompt,
         ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",

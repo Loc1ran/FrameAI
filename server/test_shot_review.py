@@ -4,6 +4,7 @@ from jsonschema.exceptions import ValidationError
 
 import main
 from validate import (
+    align_live_coach,
     load_json,
     normalize_gemini_payload,
     normalize_live_coach,
@@ -185,6 +186,44 @@ def test_live_coach_without_key_is_not_a_fake_success(client, monkeypatch):
     )
     assert response.status_code == 503
     assert "message" not in response.json()
+
+
+def test_live_coach_message_stays_on_the_guide_instruction():
+    payload = load_json("live-coach.mock.json")
+    instruction = "Step closer."
+    contradicted = align_live_coach(dict(payload, message="Tilt the phone up."), instruction)
+    assert contradicted["message"] == instruction
+    explained = align_live_coach(dict(payload, message="Step closer. The subject is small."), instruction)
+    assert explained["message"] == "Step closer. The subject is small."
+    validate_live_coach(contradicted)
+
+
+def test_shot_review_keeps_ten_phone_looks():
+    payload = load_json("shot-review.mock.json")
+    payload["source"] = "gemini"
+    payload["suggestedLutId"] = "cinematic_05"
+    payload["candidateLutIds"] = [
+        "warm_film",
+        "warm_film",
+        "alexa_logc_to_rec709",
+        "cool_cinema",
+        "cinematic_01",
+        "cinematic_02",
+        "cinematic_03",
+        "cinematic_04",
+        "cinematic_06",
+        "cinematic_07",
+        "cinematic_08",
+        "cinematic_09",
+        "not_a_lut",
+    ]
+    cleaned = normalize_gemini_payload(payload)
+    assert cleaned["candidateLutIds"][0] == "cinematic_05"
+    assert len(cleaned["candidateLutIds"]) == 10
+    assert cleaned["candidateLutIds"].count("warm_film") == 1
+    assert "alexa_logc_to_rec709" not in cleaned["candidateLutIds"]
+    assert "not_a_lut" not in cleaned["candidateLutIds"]
+    validate_shot_review(cleaned)
 
 
 def test_unconfigured_mode(client, monkeypatch):
