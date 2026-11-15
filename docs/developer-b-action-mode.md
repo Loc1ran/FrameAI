@@ -24,6 +24,10 @@ the middle captured frame.
 - `server`: pytest covers a five-frame request, burst bounds, mock labeling,
   and routing all frames to the Gemini selector.
 - `brain`: JVM tests cover local sharpness ranking.
+- The full debug app compiles with Android SDK 34 and produces
+  `app/build/outputs/apk/debug/app-debug.apk`.
+- Current automated result: 23 server tests, 79 JVM tests, and 55 Android unit
+  tests pass.
 - Phone testing is still required for actual burst speed, camera stability,
   model selection quality, lifecycle interruption, and deletion of unused files.
 
