@@ -149,12 +149,13 @@ class FrameCameraController(context: Context) {
         }
     }
 
-    /** Meter once, then freeze motion with a short exposure for the candidate burst. */
+    /** Meter once, then capture the burst. A fast shutter is used when the phone can set one. */
     @androidx.annotation.OptIn(markerClass = [ExperimentalCamera2Interop::class])
     fun takeBurst(
         files: List<File>,
         onSaved: (List<File>) -> Unit,
         onError: (String) -> Unit,
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
     ) {
         require(files.isNotEmpty()) { "Burst needs at least one output file" }
         val info = lifecycleController.cameraInfo ?: return onError("Camera is not ready.")
@@ -164,83 +165,133 @@ class FrameCameraController(context: Context) {
             ?.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR) == true
         val exposureRange = camera2.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
         val isoRange = camera2.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
-        if (!manual || exposureRange == null || isoRange == null) {
-            onError("This camera cannot set a fast Action shutter. Try a camera with manual exposure support.")
-            return
-        }
         val interop = Camera2CameraControl.from(control)
         val previous = interop.captureRequestOptions
         val token = generation
         val meter = File(files.first().parentFile, files.first().name + ".meter.jpg")
-        fun restore() { interop.setCaptureRequestOptions(previous) }
         val saved = mutableListOf<File>()
+        fun restore() { interop.setCaptureRequestOptions(previous) }
+        fun finishError(message: String) {
+            restore()
+            meter.delete()
+            if (saved.isEmpty()) onError(message) else onSaved(saved.toList())
+        }
         fun capture(index: Int) {
             if (!running || token != generation) {
-                restore()
-                onError("Burst interrupted. Captured frames are kept on the phone.")
+                finishError("Burst interrupted. Captured frames are kept on the phone.")
                 return
             }
             if (index == files.size) {
                 restore()
+                meter.delete()
                 onSaved(saved.toList())
                 return
             }
+            onProgress(index + 1, files.size)
             val file = files[index]
+            var finished = false
+            val giveUp = Runnable {
+                if (finished) return@Runnable
+                finished = true
+                files.drop(index).forEach(File::delete)
+                finishError("The camera stopped responding during the burst. Please retry.")
+            }
+            mainHandler.postDelayed(giveUp, 4_000)
             takePicture(
                 file = file,
                 onSaved = {
-                    val actualSeconds = try {
-                        ExifInterface(file).getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
-                    } catch (_: Exception) { 0.0 }
-                    if (actualSeconds <= 0.0 || actualSeconds > 0.0021) {
-                        restore()
-                        onError("Could not verify a fast shutter on this camera. Captured frames are retained in app storage.")
-                        return@takePicture
-                    }
+                    if (finished) return@takePicture
+                    finished = true
+                    mainHandler.removeCallbacks(giveUp)
                     saved += file
-                    capture(index + 1)
+                    // CameraX drops a takePicture issued inside its own save callback.
+                    mainHandler.post { capture(index + 1) }
                 },
                 onError = { message ->
-                    restore()
+                    if (finished) return@takePicture
+                    finished = true
+                    mainHandler.removeCallbacks(giveUp)
                     files.drop(index).forEach(File::delete)
-                    if (saved.isEmpty()) onError(message) else onSaved(saved.toList())
+                    finishError(message)
                 },
             )
         }
-        takePicture(meter, onSaved = {
-            try {
-                if (!running || token != generation) {
-                    meter.delete()
-                    onError("Burst interrupted. Please retry.")
-                    return@takePicture
-                }
-                val exif = ExifInterface(meter)
-                val seconds = exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
-                val iso = exif.getAttributeInt(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, 0)
+        fun captureAutomatically() {
+            restore()
+            mainHandler.post { capture(0) }
+        }
+        if (!manual || exposureRange == null || isoRange == null) {
+            captureAutomatically()
+            return
+        }
+        var meterDone = false
+        fun afterMeter(block: () -> Unit) {
+            if (meterDone) return
+            meterDone = true
+            block()
+        }
+        val meterTimeout = Runnable {
+            afterMeter {
                 meter.delete()
-                val plan = ActionExposure.plan(seconds, iso, exposureRange.lower, exposureRange.upper,
-                    isoRange.lower, isoRange.upper)
-                if (plan == null) {
-                    onError("More light is needed for a fast Action shutter, or exposure metering is unavailable.")
-                    return@takePicture
-                }
-                val options = CaptureRequestOptions.Builder()
-                    .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
-                    .setCaptureRequestOption(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
-                    .setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, plan.nanos)
-                    .setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, plan.iso)
-                    .build()
-                val applied = interop.addCaptureRequestOptions(options)
-                applied.addListener({
-                    try { applied.get(); capture(0) }
-                    catch (_: Exception) { restore(); onError("Could not apply the fast shutter. Please retry.") }
-                }, ContextCompat.getMainExecutor(appContext))
-            } catch (_: Exception) {
-                meter.delete()
-                restore()
-                onError("Could not meter the Action exposure. Please retry in brighter light.")
+                captureAutomatically()
             }
-        }, onError = { meter.delete(); onError(it) })
+        }
+        mainHandler.postDelayed(meterTimeout, 2_500)
+        takePicture(meter, onSaved = {
+            afterMeter {
+                mainHandler.removeCallbacks(meterTimeout)
+                try {
+                    if (!running || token != generation) {
+                        finishError("Burst interrupted. Please retry.")
+                        return@afterMeter
+                    }
+                    val exif = ExifInterface(meter)
+                    val seconds = exif.getAttributeDouble(ExifInterface.TAG_EXPOSURE_TIME, 0.0)
+                    val iso = exif.getAttributeInt(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, 0)
+                    meter.delete()
+                    val plan = ActionExposure.plan(
+                        seconds, iso, exposureRange.lower, exposureRange.upper, isoRange.lower, isoRange.upper,
+                    )
+                    if (plan == null) {
+                        captureAutomatically()
+                        return@afterMeter
+                    }
+                    val options = CaptureRequestOptions.Builder()
+                        .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                        .setCaptureRequestOption(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
+                        .setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, plan.nanos)
+                        .setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, plan.iso)
+                        .build()
+                    val applied = interop.addCaptureRequestOptions(options)
+                    var started = false
+                    fun start(manualShutter: Boolean) {
+                        if (started) return
+                        started = true
+                        if (!manualShutter) restore()
+                        mainHandler.post { capture(0) }
+                    }
+                    applied.addListener({
+                        val appliedOk = try {
+                            applied.get()
+                            true
+                        } catch (_: Exception) {
+                            false
+                        }
+                        start(appliedOk)
+                    }, ContextCompat.getMainExecutor(appContext))
+                    mainHandler.postDelayed({ start(false) }, 1_000)
+                } catch (_: Exception) {
+                    meter.delete()
+                    captureAutomatically()
+                }
+            }
+        }, onError = {
+            afterMeter {
+                mainHandler.removeCallbacks(meterTimeout)
+                meter.delete()
+                captureAutomatically()
+            }
+        })
     }
 
     @androidx.annotation.OptIn(markerClass = [TransformExperimental::class])

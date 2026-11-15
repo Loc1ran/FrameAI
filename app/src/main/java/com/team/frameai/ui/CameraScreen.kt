@@ -99,6 +99,7 @@ fun CameraScreen(
     var trackingError by remember { mutableStateOf<String?>(null) }
     var areaAt by remember { mutableLongStateOf(0L) }
     var capturing by remember { mutableStateOf(false) }
+    var burstStatus by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var cloudOn by rememberSaveable { mutableStateOf(false) }
     var aiFailed by remember { mutableStateOf(false) }
@@ -413,7 +414,7 @@ fun CameraScreen(
                 orientationDegrees = orientationDegrees,
                 cloudOn = cloudOn, voyage = voyage, ink = ink, lookName = lookName,
                 aiFailed = aiFailed, aiStatus = aiStatus, error = error,
-                capturing = capturing, settled = settled,
+                capturing = capturing, settled = settled, burstStatus = burstStatus,
                 athena = {
                     if (mode != CompositionMode.ACTION) {
                         AthenaCard(
@@ -446,12 +447,15 @@ fun CameraScreen(
                     error = null
                     val stamp = PhotoNames.timestamp()
                     if (mode == CompositionMode.ACTION) {
+                        burstStatus = "Starting the burst…"
                         val files = List(ACTION_BURST_SIZE) { index ->
                             ImageSaver.createOriginal(context, "${stamp}_burst_${index + 1}")
                         }
                         controller.takeBurst(
                             files = files,
+                            onProgress = { index, total -> burstStatus = "Capturing $index of $total" },
                             onSaved = { saved ->
+                                burstStatus = "Checking the burst…"
                                 scope.launch {
                                     try {
                                         val selected = if (cloudOn) {
@@ -478,11 +482,13 @@ fun CameraScreen(
                                         error = "Could not select a frame. Originals are retained in app storage; please retry."
                                     } finally {
                                         capturing = false
+                                        burstStatus = null
                                     }
                                 }
                             },
                             onError = { message ->
                                 capturing = false
+                                burstStatus = null
                                 error = message
                             },
                         )
@@ -696,6 +702,7 @@ private fun CaptureDeck(
     aiStatus: String,
     error: String?,
     capturing: Boolean,
+    burstStatus: String? = null,
     settled: Boolean,
     zoomOutEnabled: Boolean,
     zoomInEnabled: Boolean,
@@ -720,10 +727,6 @@ private fun CaptureDeck(
             }
             athena()
             if (mode == CompositionMode.ACTION) GuidanceCard(hint, null)
-            if (mode == CompositionMode.ACTION && capturing) {
-                Text("Metering light, capturing eight frames, then checking the burst…",
-                    color = FrameGold, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
-            }
         } else {
             Text("Frame it your way", color = FramePaper, fontSize = 20.sp)
             Text("The guide is off. You can take a photo at any time.", color = FrameMuted, fontSize = 12.sp)
@@ -746,9 +749,12 @@ private fun CaptureDeck(
                     color = FrameMuted, fontSize = 11.sp, maxLines = 2)
             } else if (aiFailed) Text(aiStatus, color = FrameMuted, fontSize = 11.sp, maxLines = 2)
         }
+        }
+        }
+        if (mode == CompositionMode.ACTION && !burstStatus.isNullOrBlank()) {
+            Text(burstStatus, color = FrameGold, fontSize = 13.sp)
+        }
         error?.let { Text(it, color = FrameGold, fontSize = 12.sp) }
-        }
-        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(modifier = Modifier.weight(1f), enabled = zoomOutEnabled, onClick = onZoomOut) {
                 CameraLabel(orientationDegrees, Modifier.size(56.dp)) { Text("Zoom −") }
