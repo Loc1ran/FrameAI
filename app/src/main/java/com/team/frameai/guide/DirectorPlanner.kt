@@ -315,6 +315,8 @@ class DirectorPlanner {
     }
 
     private fun symbol(action: String): String = when (action) {
+        "orbit_left" -> "↶"
+        "orbit_right" -> "↷"
         "step_left", "step_right" -> "⇄"
         "move_closer" -> "+"
         "move_farther" -> "–"

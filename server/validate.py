@@ -95,6 +95,8 @@ DIRECTOR_ACTIONS = {
     "straighten",
     "step_left",
     "step_right",
+    "orbit_left",
+    "orbit_right",
     "move_closer",
     "move_farther",
     "lower_camera",
@@ -105,6 +107,8 @@ DIRECTOR_ACTIONS = {
 PHYSICAL_ACTIONS = {
     "step_left",
     "step_right",
+    "orbit_left",
+    "orbit_right",
     "move_closer",
     "move_farther",
     "lower_camera",
@@ -165,6 +169,9 @@ def sanitize_director(cleaned: dict) -> dict:
     cleaned["actionReason"] = " ".join(reason.split())[:160]
     if cleaned["actionType"] in PHYSICAL_ACTIONS:
         cleaned["compositionPreset"] = "none"
+        cleaned["zoom"] = "hold"
+        cleaned["targetZoomRatio"] = 1.0
+        cleaned["isReady"] = False
     message = cleaned.get("message")
     if isinstance(message, str):
         cleaned["message"] = " ".join(message.split())[:120]

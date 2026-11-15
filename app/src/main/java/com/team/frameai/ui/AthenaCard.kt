@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.team.frameai.guide.OdysseyStage
 import com.team.frameai.guide.OdysseyTrial
+import com.team.frameai.guide.MovementCue
 
 @Composable
 internal fun OwlMark(modifier: Modifier = Modifier) {
@@ -49,6 +50,7 @@ internal fun AthenaCard(
     lesson: String?,
     onAccept: (OdysseyTrial) -> Unit,
     onDecline: (OdysseyTrial) -> Unit,
+    movement: MovementCue? = null,
     modifier: Modifier = Modifier,
 ) {
     val stageName = when (stage) {
@@ -66,8 +68,17 @@ internal fun AthenaCard(
             Text(stageName, color = FrameMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
             Text(symbol, color = if (stage == OdysseyStage.TRANSFORMATION) FrameGold else FramePaper, fontSize = 18.sp)
         }
+        movement?.let {
+            Text(it.label, color = FrameGold, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
         Text(title, color = FramePaper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp)
+        movement?.let {
+            Text(it.method, color = FramePaper, fontSize = 12.sp, lineHeight = 15.sp)
+        }
         Text(detail, color = FrameMuted, fontSize = 12.sp, lineHeight = 15.sp)
+        if (movement != null) {
+            Text("Try a small change. Athena will check the next view.", color = FrameGold, fontSize = 11.sp, lineHeight = 14.sp)
+        }
         lesson?.let {
             Text(it, color = FramePaper, fontSize = 12.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 2.dp))
         }

@@ -113,10 +113,24 @@ DIRECTOR_FIELDS = (
     "primaryIssue is none, subject_underexposed, backlit, harsh_light, distracting_background, clipped_highlights, "
     "tilted_horizon, weak_separation, empty_space, or already_strong. "
     "actionType is hold, pan_left, pan_right, tilt_up, tilt_down, straighten, step_left, step_right, "
-    "move_closer, move_farther, lower_camera, raise_camera, change_lighting, or expose_for_subject. "
+    "orbit_left, orbit_right, move_closer, move_farther, lower_camera, raise_camera, change_lighting, or expose_for_subject. "
     "pan and tilt aim the phone. step, move_closer, move_farther, lower_camera, and raise_camera move the person. "
     "Those are not interchangeable. Use a step or a height change when something behind the subject overlaps them "
     "and sliding the frame would not separate them. "
+    "Before small framing corrections, consider whether a different shooting position would help: "
+    "a sideways step for separation, a lower/higher viewpoint for perspective, or walking a little "
+    "around the subject to show its shape and depth. Only choose that when visible evidence supports it. "
+    "orbit_left/right means the photographer walks a short arc to their own left/right around the subject, "
+    "keeping a similar distance and aiming at it. It does not mean rotating the phone in place. "
+    "For example, if a car looks flat head-on and its visible corner suggests depth, try a small arc "
+    "toward that corner; if a pole overlaps a person, try a sideways step to separate them. "
+    "lower_camera means physically lowering the viewpoint, such as crouching, not tilting down. "
+    "Give one small experiment, not a sequence of directions or a compulsory new viewpoint. "
+    "Use everyday instructions such as 'Try a small step right to separate the person from the pole.' "
+    "Do not prescribe exact degrees, distances, or a perfect viewpoint from one frame. "
+    "Do not claim to know unseen space or guarantee what moving will reveal. "
+    "Reassess the visible composition on each new image; do not keep demanding movement if it already works. "
+    "Physical moves use compositionPreset=none, zoom=hold, targetZoomRatio=1, and isReady=false. "
     "message names the change a beginner should make, under 120 characters, including the photographic reason in everyday words. "
     "actionReason says what is visible and why the change improves the picture, under 160 characters. "
     "Do not answer with only 'move slightly left', 'adjust your position', or 'improve composition'. "
@@ -220,6 +234,8 @@ COACH_SCHEMA = {
                 "straighten",
                 "step_left",
                 "step_right",
+                "orbit_left",
+                "orbit_right",
                 "move_closer",
                 "move_farther",
                 "lower_camera",

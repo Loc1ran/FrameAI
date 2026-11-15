@@ -1,24 +1,24 @@
 package com.team.frameai.guide
 
 import com.team.frameai.model.AdviceSource
+import com.team.frameai.model.LiveCoach
 import com.team.frameai.model.LiveGuide
 import kotlin.math.abs
 
 /**
- * Turns Athena's action into the target the preview arrow follows.
- * The arrow points along (subject - target), which is the way to move the phone.
+ * Pan/tilt actions draw image-space targets. Physical viewpoint changes have no
+ * image-space destination: keeping a subject centered does not mean a walk is complete.
  */
 object AiDrawing {
     private const val STEP = 0.22f
 
     fun symbol(action: String, ready: Boolean): String = when {
-        ready || action == "hold" && ready -> "✓"
-        action == "pan_left" || action == "step_left" -> "←"
-        action == "pan_right" || action == "step_right" -> "→"
-        action == "tilt_up" || action == "raise_camera" -> "↑"
-        action == "tilt_down" || action == "lower_camera" -> "↓"
-        action == "move_closer" -> "+"
-        action == "move_farther" -> "–"
+        ready && action !in LiveCoach.PHYSICAL -> "✓"
+        ViewpointGuidance.cue(action) != null -> ViewpointGuidance.cue(action)!!.symbol
+        action == "pan_left" -> "←"
+        action == "pan_right" -> "→"
+        action == "tilt_up" -> "↑"
+        action == "tilt_down" -> "↓"
         action == "straighten" -> "↻"
         action == "hold" -> "◎"
         else -> "◎"
@@ -34,8 +34,9 @@ object AiDrawing {
         instruction: String,
     ): LiveGuide? {
         if (action == "straighten") return level(rollDegrees, instruction)
-        if (action == "change_lighting" || action == "expose_for_subject") {
+        if (action in LiveCoach.PHYSICAL) {
             return marker(instruction, subjectX ?: 0.5f, subjectY ?: 0.5f, ready = false, hideGoal = true)
+                .copy(cueSymbol = symbol(action, false), targetZoomRatio = 1.0)
         }
         val x = subjectX
         val y = subjectY
@@ -46,18 +47,12 @@ object AiDrawing {
             return marker(instruction, x, y, ready = true, hideGoal = false)
         }
         val target = when (action) {
-            "pan_left", "step_left" -> x + STEP to y
-            "pan_right", "step_right" -> x - STEP to y
-            "tilt_up", "raise_camera" -> x to y + STEP
-            "tilt_down", "lower_camera" -> x to y - STEP
-            "move_closer", "move_farther" -> x to y
+            "pan_left" -> x + STEP to y
+            "pan_right" -> x - STEP to y
+            "tilt_up" -> x to y + STEP
+            "tilt_down" -> x to y - STEP
             "hold" -> presetTarget(preset, x, y) ?: return null
             else -> presetTarget(preset, x, y) ?: return null
-        }
-        val zoom = when (action) {
-            "move_closer" -> GuideEngine.ZOOM_IN
-            "move_farther" -> GuideEngine.ZOOM_OUT
-            else -> GuideEngine.ZOOM_HOLD
         }
         return marker(
             instruction,
@@ -65,7 +60,6 @@ object AiDrawing {
             target.second.coerceIn(0.08f, 0.92f),
             ready = false,
             hideGoal = false,
-            zoom = zoom,
             subjectX = x,
             subjectY = y,
         )

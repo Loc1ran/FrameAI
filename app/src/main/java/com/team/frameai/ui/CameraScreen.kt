@@ -40,6 +40,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.team.frameai.guide.AiDrawing
+import com.team.frameai.guide.DirectorGoal
+import com.team.frameai.guide.ViewpointGuidance
 import com.team.frameai.guide.CompositionMode
 import com.team.frameai.guide.DirectorSession
 import com.team.frameai.guide.FrameRatio
@@ -166,7 +168,9 @@ fun CameraScreen(
             val requestStyle = PhotographyStyle.fromWire(styleName).wire
             val requestKey = "$requestMode|$requestStyle|${coachGate.bucket}|${coachGate.aligned}"
             val fresh = aiReply != null && SystemClock.elapsedRealtime() - aiReplyAt < 8_000
-            if (requestKey == coachGate.lastKey && fresh) {
+            // Walking around a subject can keep it centered while the viewpoint changes.
+            // Reassess the next preview instead of waiting for a 2D box to move.
+            if (requestKey == coachGate.lastKey && fresh && aiReply?.actionType !in LiveCoach.VIEWPOINT) {
                 controller.finishFrameSend()
             } else scope.launch {
                 try {
@@ -225,11 +229,18 @@ fun CameraScreen(
     }
     LaunchedEffect(mode) { controller.setActionMode(mode == CompositionMode.ACTION) }
     val now = SystemClock.elapsedRealtime()
-    val goal = director.current(now)
-    val sceneAdvice = SceneComposition.suggest(aiReply, cloudOn, client.enabled, aiFailed)
+    val goal = if (cloudOn && mode == CompositionMode.SUBJECT) director.current(now) else null
+    val reply = aiReply?.takeIf {
+        it.source == AdviceSource.GEMINI.wire &&
+            (it.actionType !in LiveCoach.PHYSICAL || DirectorGoal.from(it, now, modeGeneration) != null)
+    }
+    val sceneAdvice = SceneComposition.suggest(
+        if (aiReply?.source == AdviceSource.GEMINI.wire) reply else aiReply,
+        cloudOn, client.enabled, aiFailed,
+    )
     val episode = Odyssey.episodeAt(episodeIndex)
-    val reply = aiReply?.takeIf { it.source == AdviceSource.GEMINI.wire }
     val aiAction = goal?.action ?: reply?.actionType
+    val movement = if (mode != CompositionMode.ACTION) aiAction?.let(ViewpointGuidance::cue) else null
     val aiPreset = goal?.preset ?: reply?.compositionPreset ?: "none"
     val aiReady = aiAction == "hold" && reply?.isReady == true
     val drawn = if (mode != CompositionMode.ACTION && aiAction != null) {
@@ -247,8 +258,8 @@ fun CameraScreen(
     }
     val plainHint = when (mode) {
         CompositionMode.SCENE ->
-            if (aiReply?.source == AdviceSource.GEMINI.wire) {
-                FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
+            if (reply != null) {
+                FramingHint(sceneAdvice.title, sceneAdvice.detail, AiDrawing.symbol(reply.actionType, aiReady), aiReady)
             } else {
                 FramingHint("Athena is looking", "The scene guide waits for her. You can take the photo at any time.", "◎")
             }
@@ -421,9 +432,10 @@ fun CameraScreen(
                             title = hint.title,
                             detail = hint.detail,
                             symbol = hint.symbol,
-                            offer = athenaOffer,
-                            active = athenaActive,
-                            lesson = athenaLesson,
+                            movement = movement,
+                            offer = if (movement == null) athenaOffer else null,
+                            active = if (movement == null) athenaActive else null,
+                            lesson = if (movement == null) athenaLesson else null,
                             onAccept = { trial ->
                                 trials.accept(trial, evidence)
                                 athenaActive = trial

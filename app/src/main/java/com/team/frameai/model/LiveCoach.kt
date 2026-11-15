@@ -95,6 +95,8 @@ data class LiveCoach(
             "straighten",
             "step_left",
             "step_right",
+            "orbit_left",
+            "orbit_right",
             "move_closer",
             "move_farther",
             "lower_camera",
@@ -102,13 +104,17 @@ data class LiveCoach(
             "change_lighting",
             "expose_for_subject",
         )
-        val PHYSICAL = setOf(
+        val VIEWPOINT = setOf(
             "step_left",
             "step_right",
+            "orbit_left",
+            "orbit_right",
             "move_closer",
             "move_farther",
             "lower_camera",
             "raise_camera",
+        )
+        val PHYSICAL = VIEWPOINT + setOf(
             "change_lighting",
             "expose_for_subject",
         )

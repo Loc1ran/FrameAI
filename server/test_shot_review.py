@@ -221,6 +221,29 @@ def test_invalid_director_action_does_not_steer():
     validate_live_coach(cleaned)
 
 
+@pytest.mark.parametrize("action", ["orbit_left", "orbit_right", "step_left", "lower_camera", "move_closer"])
+def test_viewpoint_is_not_a_zoom_target_or_completed_composition(action):
+    payload = load_json("live-coach.mock.json")
+    payload.update({
+        "actionType": action,
+        "compositionPreset": "centered",
+        "zoom": "in",
+        "targetZoomRatio": 2,
+        "isReady": True,
+        "message": "Try moving around the car to show more of its side.",
+        "actionReason": "The current head-on view makes the car look flat.",
+        "confidence": 0.8,
+        "source": "gemini",
+    })
+    cleaned = normalize_live_coach(payload)
+    validate_live_coach(cleaned)
+    assert cleaned["actionType"] == action
+    assert cleaned["compositionPreset"] == "none"
+    assert cleaned["zoom"] == "hold"
+    assert cleaned["targetZoomRatio"] == 1
+    assert cleaned["isReady"] is False
+
+
 def test_low_confidence_direction_is_not_replaced_by_the_phone_cue():
     payload = load_json("live-coach.mock.json")
     payload.update({

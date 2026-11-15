@@ -16,6 +16,26 @@ class DirectorPlannerTest {
     private val engine = GuideEngine()
     private val planner = DirectorPlanner()
 
+    @Test fun walkingAroundKeepsTheSubjectButDoesNotInventATarget() {
+        val face = faceAt(0.5f, 0.33f)
+        val offline = engine.advise(face)
+        for (action in listOf("orbit_left", "orbit_right")) {
+            val goal = goal(
+                action = action,
+                preset = "none",
+                instruction = "Try walking a little around the car to show its side.",
+                reason = "The head-on view makes the car look flat.",
+            )
+            val result = planner.merge(offline, goal, NOW, engine, face, null).guide
+            assertTrue(result.hideGoal)
+            assertFalse(result.isReady)
+            assertEquals("hold", result.zoom)
+            assertEquals(goal.instruction, result.message)
+            assertEquals(goal.reason, result.detail)
+            assertEquals(offline.guide.targetX, result.targetX)
+        }
+    }
+
     @Test fun centeredPortraitCanStayCentered() {
         val face = faceAt(0.5f, 0.33f)
         val offline = engine.advise(face)
