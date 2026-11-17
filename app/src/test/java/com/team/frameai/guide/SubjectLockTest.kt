@@ -18,6 +18,23 @@ class SubjectLockTest {
     }
 
     @Test
+    fun aNewTrackingNumberOnTheSameBoxDoesNotStartOver() {
+        val lock = SubjectLock()
+        lock.choose(listOf(candidate(7, 0.60f, 0.50f, 0.20f, 0.30f)), 0)
+        val moved = candidate(11, 0.62f, 0.52f, 0.20f, 0.30f)
+        assertEquals(11, lock.choose(listOf(moved), 100)?.id)
+    }
+
+    @Test
+    fun aHeadInsideABodyBecomesTheBody() {
+        val head = candidate(1, 0.50f, 0.22f, 0.16f, 0.12f)
+        val body = candidate(2, 0.50f, 0.48f, 0.34f, 0.70f)
+        val lock = SubjectLock()
+        lock.choose(listOf(head), 0)
+        assertEquals(2, lock.choose(listOf(head, body), 100)?.id)
+    }
+
+    @Test
     fun aNewSubjectIsTheOneNearestTheCenter() {
         val bottle = candidate(7, 0.55f, 0.5f, 0.16f, 0.3f)
         val monitor = candidate(3, 0.15f, 0.4f, 0.24f, 0.4f)
@@ -36,12 +53,13 @@ class SubjectLockTest {
         val bottle = candidate(7, 0.6f, 0.5f, 0.16f, 0.3f)
         val monitor = candidate(3, 0.5f, 0.5f, 0.3f, 0.4f)
         lock.choose(listOf(bottle), 0)
-        assertNull(lock.choose(emptyList(), 100))
-        assertNull(lock.choose(listOf(monitor), 400))
+        assertEquals(7, lock.choose(emptyList(), 100)?.id)
+        assertEquals(7, lock.choose(listOf(monitor), 400)?.id)
         assertTrue(lock.isLocked(400))
         assertEquals(7, lock.choose(listOf(monitor, bottle), 800)?.id)
         assertFalse(lock.isLocked(1_801))
-        assertEquals(3, lock.choose(listOf(monitor), 1_801)?.id)
+        assertEquals(7, lock.choose(listOf(monitor), 1_801)?.id)
+        assertEquals(3, lock.choose(listOf(monitor), 3_400)?.id)
     }
 
     @Test fun aTapSelectsThatObjectInsteadOfTheNearestCenter() {
@@ -50,9 +68,9 @@ class SubjectLockTest {
         val lock = SubjectLock()
         lock.select(3, 0)
         assertEquals(3, lock.choose(listOf(bottle, monitor), 100)?.id)
-        assertNull(lock.choose(listOf(bottle), 200))
+        assertEquals(3, lock.choose(listOf(bottle), 200)?.id)
         assertTrue(lock.hasSelection())
-        assertEquals(7, lock.choose(listOf(bottle), 1_800)?.id)
+        assertEquals(7, lock.choose(listOf(bottle), 2_800)?.id)
         assertFalse(lock.hasSelection())
     }
 

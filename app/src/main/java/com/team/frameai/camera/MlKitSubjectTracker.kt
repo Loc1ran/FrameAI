@@ -24,7 +24,7 @@ data class TrackedFrame(
 )
 
 /**
- * Follows one prominent object without switching to newly appearing faces.
+ * Finds objects in the frame and follows only the one the user taps.
  * The camera controller closes the image. This tracker does not.
  */
 class MlKitSubjectTracker(
@@ -61,13 +61,12 @@ class MlKitSubjectTracker(
         val (width, height) = FaceBoxMath.uprightSize(input.width, input.height, rotation)
         val candidates = found.mapNotNull { item ->
             val upright = normalize(item.boundingBox, width, height) ?: return@mapNotNull null
-            TrackCandidate(
-                id = item.trackingId,
-                box = FrameRect(upright.left, upright.top, upright.right, upright.bottom),
-            )
+            val box = FrameRect(upright.left, upright.top, upright.right, upright.bottom)
+            TrackCandidate(id = item.trackingId ?: fallbackId(box), box = box)
         }
         val boxes = candidates.map { it.box }
         val subjects = candidates.mapNotNull { candidate ->
+            if (!tappable(candidate.box)) return@mapNotNull null
             val id = candidate.id ?: return@mapNotNull null
             val upright = FaceBoxNormalized.fromEdges(
                 candidate.box.left, candidate.box.top, candidate.box.right, candidate.box.bottom,
@@ -99,6 +98,19 @@ class MlKitSubjectTracker(
     override fun close() {
         closed = true
         detector.close()
+    }
+
+    private fun tappable(box: FrameRect): Boolean {
+        if (box.width < 0.03f || box.height < 0.03f) return false
+        if (box.width > 0.96f && box.height > 0.96f) return false
+        return true
+    }
+
+    /** A stand-in id for a box the stream tracker has not numbered yet. -1 is reserved for a face. */
+    private fun fallbackId(box: FrameRect): Int {
+        val column = (box.centerX * 16f).toInt().coerceIn(0, 16)
+        val row = (box.centerY * 16f).toInt().coerceIn(0, 16)
+        return -2 - (row * 17 + column)
     }
 
     private fun normalize(rect: Rect, uprightWidth: Int, uprightHeight: Int): FaceBoxNormalized? {

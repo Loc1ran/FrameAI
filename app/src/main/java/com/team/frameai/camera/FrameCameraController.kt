@@ -28,6 +28,7 @@ import com.team.frameai.guide.GeometryMeasure
 import com.team.frameai.guide.LightingAnalyzer
 import com.team.frameai.guide.LightingMap
 import com.team.frameai.guide.LightingRead
+import com.team.frameai.guide.PersonFrame
 import com.team.frameai.guide.SceneGeometry
 import com.team.frameai.guide.ShapeOverlap
 import com.team.frameai.guide.SubjectTap
@@ -58,6 +59,8 @@ class FrameCameraController(context: Context) {
     @Volatile var previewView: androidx.camera.view.PreviewView? = null
     @Volatile var onGuide: (LiveGuide, FaceBoxNormalized?, SceneGeometry?, LightingMap?, String?, Boolean) -> Unit =
         { _, _, _, _, _, _ -> }
+    @Volatile private var followFace = false
+    private var faceSeenAt = 0L
     private val previewTargets = java.util.concurrent.atomic.AtomicReference<List<TrackCandidate>>(emptyList())
     @Volatile var onFrameJpeg: ((ByteArray) -> Unit)? = null
     @Volatile var captureFrames: Boolean = false
@@ -299,10 +302,18 @@ class FrameCameraController(context: Context) {
         if (!running) return
         val token = generation
         val frameAt = SystemClock.elapsedRealtime()
-        val manual = subjectTracker.hasSelection
         val tracked = subjectTracker.inspect(image)
-        val face = if (manual) null else detector?.detectPrimaryFace(image)
-        val raw = if (manual) tracked.primary else face ?: tracked.primary
+        val face = detector?.detectPrimaryFace(image)
+        val nowMs = SystemClock.elapsedRealtime()
+        if (followFace && face != null) faceSeenAt = nowMs
+        if (followFace && nowMs - faceSeenAt > 1_500L) followFace = false
+        val rotation = image.imageInfo.rotationDegrees
+        val raw = when {
+            followFace -> face
+            subjectTracker.hasSelection -> tracked.primary
+            else -> PersonFrame.cover(tracked.primary, face, rotation)
+        }
+        val userChoseSubject = subjectTracker.hasSelection || followFace
         val overlap = ShapeOverlap.strongest(tracked.boxes)
         val samples = LumaGridSampler.sample(image)
         val measured = samples?.let { GeometryMeasure.measure(it).forViewer(frontCamera()) }
@@ -310,7 +321,6 @@ class FrameCameraController(context: Context) {
         val source = ImageProxyTransformFactory().getOutputTransform(image)
         val width = image.width
         val height = image.height
-        val rotation = image.imageInfo.rotationDegrees
         val upright = raw?.let {
             FaceBoxMath.sensorBoxToUpright(
                 FaceBoxNormalized(it.centerX, it.centerY, it.left, it.top, it.right, it.bottom),
@@ -333,7 +343,7 @@ class FrameCameraController(context: Context) {
                 val preview = previewView
                 val target = preview?.outputTransform
                 val fresh = preview != null && target != null &&
-                    SystemClock.elapsedRealtime() - frameAt < 1_500L
+                    SystemClock.elapsedRealtime() - frameAt < 4_000L
                 val mapped = if (raw != null && fresh) {
                     AnalysisCoordinateMapper.map(
                         source,
@@ -361,7 +371,28 @@ class FrameCameraController(context: Context) {
                         TrackCandidate(subject.id, FrameRect(box.left, box.top, box.right, box.bottom))
                     }
                 } else emptyList()
-                previewTargets.set(choices)
+                val faceChoice = if (face != null && fresh && preview != null && target != null) {
+                    val mappedFace = AnalysisCoordinateMapper.map(
+                        source,
+                        target,
+                        width,
+                        height,
+                        preview.width,
+                        preview.height,
+                        face,
+                        mirroredPreview = frontCamera(),
+                    )
+                    val rect = mappedFace?.let { FrameRect(it.left, it.top, it.right, it.bottom) }
+                    if (rect != null && tappableBox(rect) && choices.none { containsPoint(it.box, rect.centerX, rect.centerY) }) {
+                        TrackCandidate(FACE_SUBJECT, rect)
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+                val visible = if (faceChoice == null) choices else choices + faceChoice
+                previewTargets.set(visible)
                 val guide = when {
                     raw != null && mapped == null -> staticTargetGuide()
                     else -> compositionGuide?.suggest(mapped, null, scene) ?: detectedGuide(mapped)
@@ -399,7 +430,7 @@ class FrameCameraController(context: Context) {
                     }
                 }
                 latestLighting = scene?.lighting
-                onGuide(guide, mapped, lines, lightingMap, null, subjectTracker.hasSelection)
+                onGuide(guide, mapped, lines, lightingMap, null, userChoseSubject)
             } catch (error: Exception) {
                 Log.w("FrameAI", "Preview mapping unavailable", error)
                 latestLighting = null
@@ -409,7 +440,7 @@ class FrameCameraController(context: Context) {
                     null,
                     null,
                     "The framing guide could not align with the preview. Reopen the camera to retry.",
-                    subjectTracker.hasSelection,
+                    userChoseSubject,
                 )
             }
         }
@@ -451,14 +482,24 @@ class FrameCameraController(context: Context) {
         val chosen = SubjectTap.choose(previewTargets.get(), x, y)
         val id = chosen?.id
         if (id == null) {
-            subjectTracker.clearSelection()
+            clearSubjectSelection()
             return false
         }
+        if (id == FACE_SUBJECT) {
+            subjectTracker.clearSelection()
+            followFace = true
+            faceSeenAt = SystemClock.elapsedRealtime()
+            return true
+        }
+        followFace = false
         subjectTracker.select(id)
         return true
     }
 
-    fun clearSubjectSelection() = subjectTracker.clearSelection()
+    fun clearSubjectSelection() {
+        followFace = false
+        subjectTracker.clearSelection()
+    }
 
     private fun maybeSendFrame(image: androidx.camera.core.ImageProxy) {
         if (!captureFrames) return
@@ -519,9 +560,19 @@ class FrameCameraController(context: Context) {
         source = "offline_rules",
     )
 
+    private fun tappableBox(box: FrameRect): Boolean {
+        if (box.width < 0.03f || box.height < 0.03f) return false
+        if (box.width > 0.96f && box.height > 0.96f) return false
+        return true
+    }
+
+    private fun containsPoint(box: FrameRect, x: Float, y: Float): Boolean =
+        x in box.left..box.right && y in box.top..box.bottom
+
     private companion object {
         const val TARGET_X = 0.67
         const val TARGET_Y = 0.33
         const val FRAME_INTERVAL_MS = 4_000L
+        const val FACE_SUBJECT = -1
     }
 }

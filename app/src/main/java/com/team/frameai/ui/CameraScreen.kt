@@ -40,6 +40,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.team.frameai.guide.AiDrawing
+import com.team.frameai.guide.AimLock
 import com.team.frameai.guide.CompositionMode
 import com.team.frameai.guide.DirectorSession
 import com.team.frameai.guide.FrameRatio
@@ -112,6 +113,7 @@ fun CameraScreen(
     val photoStyle = PhotographyStyle.fromWire(styleName)
     var lookName by remember { mutableStateOf<String?>(null) }
     val coachGate = remember { CoachGate() }
+    val aim = remember { AimLock() }
     var resumed by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val controller = remember { FrameCameraController(context.applicationContext) }
@@ -140,6 +142,7 @@ fun CameraScreen(
                 live = null
                 geometry = null
                 lightingMap = null
+                aim.clear()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -167,7 +170,8 @@ fun CameraScreen(
             val requestStyle = PhotographyStyle.fromWire(styleName).wire
             val requestKey = "$requestMode|$requestStyle|${coachGate.bucket}|${coachGate.aligned}"
             val fresh = aiReply != null && SystemClock.elapsedRealtime() - aiReplyAt < 8_000
-            if (requestKey == coachGate.lastKey && fresh) {
+            val stay = coachGate.following || (coachGate.aligned && !coachGate.drifted())
+            if (stay || (requestKey == coachGate.lastKey && fresh)) {
                 controller.finishFrameSend()
             } else scope.launch {
                 try {
@@ -212,11 +216,17 @@ fun CameraScreen(
         if (!granted && !asked) { asked = true; launcher.launch(Manifest.permission.CAMERA) }
     }
     LaunchedEffect(areaAt) {
-        delay(1_500)
+        delay(4_000)
         area = null
     }
     LaunchedEffect(aiReplyAt) {
-        if (aiReply != null) { delay(8_000); aiReply = null; aiStatus = "Waiting for a fresh suggestion…" }
+        if (aiReply != null) {
+            delay(8_000)
+            if (!coachGate.following && !coachGate.aligned) {
+                aiReply = null
+                aiStatus = "Waiting for a fresh suggestion…"
+            }
+        }
     }
     LaunchedEffect(tapMark) {
         if (tapMark != null) {
@@ -232,24 +242,27 @@ fun CameraScreen(
     val reply = aiReply?.takeIf { it.source == AdviceSource.GEMINI.wire }
     val aiAction = goal?.action ?: reply?.actionType
     val aiPreset = goal?.preset ?: reply?.compositionPreset ?: "none"
-    val aiReady = aiAction == "hold" && reply?.isReady == true
     val drawn = if (mode != CompositionMode.ACTION && aiAction != null) {
-        AiDrawing.guide(
+        aim.draw(
             aiAction,
             aiPreset,
             area?.anchorX,
             area?.anchorY,
-            aiReady,
+            area?.height,
+            reply?.isReady == true || goal?.issue == "already_strong",
+            goal?.issue ?: reply?.primaryIssue ?: "none",
             geometry?.rollDegrees,
             goal?.instruction ?: reply?.message.orEmpty(),
         )
     } else {
         null
     }
+    val aiReady = drawn?.isReady == true
     val plainHint = when (mode) {
         CompositionMode.SCENE ->
             if (aiReply?.source == AdviceSource.GEMINI.wire) {
-                FramingHint(sceneAdvice.title, sceneAdvice.detail, if (sceneAdvice.ready) "✓" else "◎", sceneAdvice.ready)
+                val ready = aiReady || sceneAdvice.ready
+                FramingHint(sceneAdvice.title, sceneAdvice.detail, if (ready) "✓" else "◎", ready)
             } else {
                 FramingHint("Athena is looking", "The scene guide waits for her. You can take the photo at any time.", "◎")
             }
@@ -275,12 +288,12 @@ fun CameraScreen(
             )
             !cloudOn || !client.enabled -> FramingHint(
                 "Athena is off",
-                "Turn AI on for a direction. Nothing is drawn until she answers, and you can still take the photo.",
+                "Turn AI on for a direction. The subject stays framed, and the arrow appears when she answers.",
                 "◎",
             )
             aiFailed -> FramingHint(
                 "Athena is unavailable",
-                "No guide is drawn until she answers. You can still take the photo.",
+                "The subject stays framed. The arrow appears when she answers.",
                 "◎",
             )
             else -> FramingHint(
@@ -323,14 +336,15 @@ fun CameraScreen(
     }
     val ink = if (voyage) VoyageTheme.of(episode) else null
     coachGate.aligned = hint.aligned
+    coachGate.following = drawn != null && !hint.aligned &&
+        aiAction != "change_lighting" && aiAction != "expose_for_subject"
     coachGate.bucket = area?.let { "${(it.anchorX * 8f).toInt()}:${(it.anchorY * 8f).toInt()}" } ?: "none"
-    var settled by remember { mutableStateOf(false) }
-    LaunchedEffect(hint.aligned, cloudOn) {
-        if (hint.aligned && cloudOn) {
-            coachGate.lastKey = ""
-            controller.requestAnalysisSoon()
-        }
+    if (hint.aligned) {
+        if (coachGate.readyBucket == "none") coachGate.readyBucket = coachGate.bucket
+    } else {
+        coachGate.readyBucket = "none"
     }
+    var settled by remember { mutableStateOf(false) }
     LaunchedEffect(hint.aligned, guided, mode) {
         settled = false
         if (hint.aligned && guided) { delay(600); settled = true }
@@ -372,6 +386,7 @@ fun CameraScreen(
                                 tapMark = offset
                                 controller.selectSubjectAt(offset.x / size.width, offset.y / size.height)
                                 director.bump()
+                                aim.clear()
                                 coachGate.lastKey = ""
                                 modeGeneration++
                                 aiReply = null
@@ -528,6 +543,7 @@ fun CameraScreen(
                     aiFailed = false
                     aiReply = null
                     director.bump()
+                    aim.clear()
                     coachGate.lastKey = ""
                 },
                 onRatio = { if (!capturing) ratioName = it.name },
@@ -547,6 +563,7 @@ fun CameraScreen(
                     aiFailed = false
                     modeGeneration++
                     director.bump()
+                    aim.clear()
                     coachGate.lastKey = ""
                     lookName = null
                     controller.sceneLutAllowed = true
@@ -561,6 +578,7 @@ fun CameraScreen(
                     if (capturing || choice.wire == styleName) return@StyleRow
                     styleName = choice.wire
                     director.bump()
+                    aim.clear()
                     coachGate.lastKey = ""
                     aiReply = null
                     aiFailed = false
@@ -821,7 +839,19 @@ private fun StyleRow(
 private class CoachGate {
     var lastKey: String = ""
     var aligned: Boolean = false
+    var following: Boolean = false
     var bucket: String = "none"
+    var readyBucket: String = "none"
+
+    fun drifted(): Boolean {
+        if (readyBucket == "none" || bucket == "none" || readyBucket == bucket) return false
+        val ready = readyBucket.split(":")
+        val now = bucket.split(":")
+        if (ready.size != 2 || now.size != 2) return true
+        val dx = kotlin.math.abs((now[0].toIntOrNull() ?: 0) - (ready[0].toIntOrNull() ?: 0))
+        val dy = kotlin.math.abs((now[1].toIntOrNull() ?: 0) - (ready[1].toIntOrNull() ?: 0))
+        return dx + dy >= 2
+    }
 }
 
 private fun modeLabel(mode: CompositionMode): String = when (mode) {

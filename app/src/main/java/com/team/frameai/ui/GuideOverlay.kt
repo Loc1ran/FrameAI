@@ -48,15 +48,15 @@ internal fun GuideOverlay(
             listOf(h / 3f, h * 2f / 3f).forEach { y ->
                 drawLine(grid, Offset(0f, y), Offset(w, y), 1.dp.toPx())
             }
-            if (guide == null) return@Canvas
+            if (guide == null) {
+                drawSubject(area)
+                return@Canvas
+            }
             val ready = guide.isReady || markReady
             val readyColor = course?.light ?: FrameReady
             val aimColor = course?.line ?: FrameGold
             if (guide.hideGoal || LightingAdviceEngine.isCue(guide.message)) {
-                val picture = GuidePicture.of(guide, area)
-                if (area != null && area.width > 0.02f && area.height > 0.02f) {
-                    drawSolid(picture.current, FramePaper)
-                }
+                drawSubject(area)
                 return@Canvas
             }
             val geometryCue = guide.message == GeometryCoach.ROTATE_CLOCKWISE ||
@@ -66,10 +66,7 @@ internal fun GuideOverlay(
             val accent = if (ready) readyColor else aimColor
             if (geometryCue) {
                 drawGeometry(guide, geometry, accent)
-                val picture = GuidePicture.of(guide, area)
-                if (area != null && area.width > 0.02f && area.height > 0.02f) {
-                    drawSolid(picture.current, if (ready) readyColor else FramePaper)
-                }
+                drawSubject(area, if (ready) readyColor else FramePaper)
                 val rotating = guide.message == GeometryCoach.ROTATE_CLOCKWISE ||
                     guide.message == GeometryCoach.ROTATE_COUNTERCLOCKWISE
                 if (!rotating && guide.message != GeometryCoach.SEPARATE_SHAPES &&
@@ -90,9 +87,7 @@ internal fun GuideOverlay(
             }
             val picture = GuidePicture.of(guide, area)
             drawDashed(picture.goal, accent)
-            if (area != null && area.width > 0.02f && area.height > 0.02f) {
-                drawSolid(picture.current, if (ready) readyColor else FramePaper)
-            }
+            drawSubject(area, if (ready) readyColor else FramePaper)
             if (ready) {
                 drawCheck(centerOf(picture.goal), readyColor)
             } else if (guide.message != GeometryCoach.SEPARATE_SHAPES) {
@@ -186,6 +181,11 @@ private fun DrawScope.drawDashed(rect: FrameRect, color: Color) {
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(16.dp.toPx(), 10.dp.toPx())),
         ),
     )
+}
+
+private fun DrawScope.drawSubject(area: FaceBoxNormalized?, color: Color = FramePaper) {
+    if (area == null || area.width <= 0.02f || area.height <= 0.02f) return
+    drawSolid(FrameRect(area.left, area.top, area.right, area.bottom), color)
 }
 
 private fun DrawScope.drawSolid(rect: FrameRect, color: Color) {

@@ -71,6 +71,26 @@ object AiDrawing {
         )
     }
 
+    /** A guide aimed at one fixed point. Ready draws the green signal instead of the arrow. */
+    fun pinned(
+        instruction: String,
+        subjectX: Float,
+        subjectY: Float,
+        targetX: Float,
+        targetY: Float,
+        ready: Boolean,
+    ): LiveGuide {
+        return marker(
+            instruction,
+            if (ready) subjectX else targetX,
+            if (ready) subjectY else targetY,
+            ready = ready,
+            hideGoal = false,
+            subjectX = subjectX,
+            subjectY = subjectY,
+        )
+    }
+
     /** Positive phone X means the arrow points right. */
     fun phoneX(subjectX: Float, targetX: Float): Float = subjectX - targetX
 
