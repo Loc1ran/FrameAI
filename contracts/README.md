@@ -1,22 +1,39 @@
-# Frozen contracts (H+0.25)
+# Frozen contracts
 
-Do **not** invent field names. Changes require explicit A+B agreement.
+Do not invent field names. Schemas in this folder are the source of truth. The copies under `app/src/main/assets/contracts/` must match the mocks listed in `app/build.gradle.kts`.
 
-## LiveGuide (local coach)
+## LiveGuide (on-device coach)
 
 Allowed `kind`: `ALIGN_SUBJECT` | `READY` | `NO_FACE`  
-Coordinates are PreviewView-normalized `[0,1]` after crop/rotation/mirror — not raw sensor pixels.  
-Default portrait target: `(0.67, 0.33)`.
+Coordinates are PreviewView-normalized `[0,1]` after crop, rotation, and mirror.
 
 Mocks: `live-guide.mock.json`, `live-guide.ready.mock.json`, `live-guide.noface.mock.json`
 
+## LiveCoach (optional cloud)
+
+`POST /v1/live-coach?composition=subject|scene`  
+Multipart JPEG field `image`, form fields `style` and `instruction`, header `X-Demo-Token`.  
+A scene response must include `X-FrameAI-Composition: scene`.
+
+Required fields are in `live-coach.schema.json`. `source` is `gemini` or `demo_mock`.  
+Mock: `live-coach.mock.json`
+
 ## ShotReview (optional cloud)
 
-Allowed `suggestedLutId`: `warm_film` | `cool_cinema` | `none`  
-Allowed `sceneType`: `portrait` | `landscape` | `street` | `other`  
-`source` is mandatory so mocks are never labeled as Gemini.
+`POST /v1/shot-review` with one JPEG field `image` and header `X-Demo-Token`.
 
-API (optional):
+`suggestedLutId` is `none` or an id in `luts.json`. The review row keeps at most 10 phone-photo ids (`phoneJpeg: true`). Camera-log conversions are not offered there.  
+`source` is mandatory so a mock is never labeled as Gemini.
 
-- `GET /health` → `{ "status": "ok", "aiMode": "mock" }`
-- `POST /v1/shot-review` multipart JPEG + `X-Demo-Token`
+Mocks: `shot-review.mock.json`, `shot-review.offline.json`
+
+## Action best shot (optional cloud)
+
+`POST /v1/action-best-shot` with 2 to 8 JPEG fields named `images` and header `X-Demo-Token`.
+
+Response: `selectedIndex`, `usable`, `reason`, `source`.  
+Mock mode returns the middle frame with `usable: false` and `source: demo_mock`. The phone does not treat that as an AI pick.
+
+## Health
+
+`GET /health` → `{ "status": "ok", "aiMode": "mock", "geminiConfigured": false }`
