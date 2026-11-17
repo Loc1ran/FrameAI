@@ -1,0 +1,16 @@
+FrameAI
+Copyright (c) 2026 Loc Tran
+
+This product includes third-party components that stay under their own
+licenses:
+
+- AndroidX, Jetpack Compose, CameraX, and AndroidX EXIF Interface
+  (Apache License, Version 2.0)
+- Kotlin coroutines and kotlinx.serialization (Apache License, Version 2.0)
+- Google ML Kit face detection and object detection (Apache License, Version 2.0)
+- FastAPI, Uvicorn, python-multipart, jsonschema, google-genai, httpx, and
+  pytest (the license shipped with each package)
+
+The .cube files under app/src/main/assets/luts/ and lut_assets/ are not
+original FrameAI works. Film, camera, and brand names in those files belong
+to their owners.
