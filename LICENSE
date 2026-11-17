@@ -1,0 +1,33 @@
+FrameAI Proprietary License
+
+Copyright (c) 2026 Loc Tran. All rights reserved.
+
+FrameAI, including its source code, documentation, and original assets, is
+proprietary. The copyright holder reserves every right not granted in writing,
+including the right to sell, license, and distribute FrameAI commercially.
+
+No permission is granted to use, copy, modify, merge, publish, distribute,
+sublicense, or sell this software, in source or binary form, except under a
+separate written agreement with the copyright holder.
+
+Third-party components that this project compiles or calls stay under their own
+licenses. This file does not change those terms. They include:
+
+- AndroidX, Jetpack Compose, CameraX, and AndroidX EXIF Interface
+  (Apache License, Version 2.0)
+- Kotlin coroutines and kotlinx.serialization (Apache License, Version 2.0)
+- Google ML Kit face detection and object detection (Apache License, Version 2.0)
+- FastAPI, Uvicorn, python-multipart, jsonschema, google-genai, httpx, and
+  pytest (the license shipped with each package)
+
+The .cube files under app/src/main/assets/luts/ and lut_assets/ are not claimed
+as original FrameAI works by this file. Film, camera, and brand names in those
+files belong to their owners. Confirm the right to ship each look before
+selling a build that includes it.
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
